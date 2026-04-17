@@ -108,34 +108,16 @@ class CheckpointCyclerCU:
     def INPUT_TYPES(cls):
         names = folder_paths.get_filename_list("checkpoints")
         
-        folders = set()
-        for c in names:
-            c = c.replace("\\", "/")
-            if "/" in c:
-                parts = c.split("/")[:-1]
-                for i in range(1, len(parts) + 1):
-                    folders.add("/".join(parts[:i]).lower())
-                
-        folder_list = [""] + sorted(list(folders))
-        
-        try:
-            from py.utils.model_utils import BASE_MODEL_MAPPING
-            b_list = sorted(list(set(BASE_MODEL_MAPPING.values())))
-        except ImportError:
-            b_list = ["SD 1.5", "SD 2.0", "SD 2.1", "SDXL 1.0", "Flux.1 D", "Illustrious", "Pony", "Hunyuan Video"]
-            
-        base_model_list = [""] + b_list + ["Unknown"]
-        
         return {
             "required": {
                 "ckpt_name": (["Auto (Cycle)"] + names, {"default": "Auto (Cycle)"}),
-                "base_models": (base_model_list, {"default": ""}),
-                "tags_include": ([""], {"default": ""}),
-                "tags_exclude": ([""], {"default": ""}),
-                "folders_include": (folder_list, {"default": ""}),
-                "folders_exclude": (folder_list, {"default": ""}),
+                "base_models": ("STRING", {"default": ""}),
+                "tags_include": ("STRING", {"default": ""}),
+                "tags_exclude": ("STRING", {"default": ""}),
+                "folders_include": ("STRING", {"default": ""}),
+                "folders_exclude": ("STRING", {"default": ""}),
                 "repeats": ("INT", {"default": 1, "min": 1, "max": 9999}),
-                "current_index": ("INT", {"default": 1, "min": 1, "max": 999999}),
+                "current_index": ("INT", {"default": 0, "min": 0, "max": 999999}),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID",
@@ -250,7 +232,7 @@ class CheckpointCyclerCU:
                 }
             }
 
-        real_idx = max(0, current_index - 1)
+        real_idx = max(0, current_index)
         cycle_idx = (real_idx // max(1, repeats)) % len(models)
         
         selected = models[cycle_idx]
