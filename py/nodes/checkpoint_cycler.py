@@ -6,8 +6,13 @@ import asyncio
 
 # Ensure lora-manager is in path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-lora_manager_path = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "lora-manager")
-if lora_manager_path not in sys.path:
+extension_dir = os.path.dirname(os.path.dirname(current_dir))
+parent_dir = os.path.dirname(extension_dir)
+lora_manager_path = os.path.join(parent_dir, "ComfyUI-Lora-Manager")
+if not os.path.exists(lora_manager_path):
+    lora_manager_path = os.path.join(parent_dir, "lora-manager")
+
+if os.path.exists(lora_manager_path) and lora_manager_path not in sys.path:
     sys.path.insert(0, lora_manager_path)
 
 logger = logging.getLogger(__name__)
