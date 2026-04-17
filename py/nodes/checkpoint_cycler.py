@@ -1,5 +1,5 @@
 import logging
-import asyncio
+import folder_paths
 import os
 import sys
 
@@ -18,57 +18,17 @@ class CheckpointCyclerCU:
     CATEGORY = "Lora Manager/randomizer"
 
     @classmethod
-    def _get_checkpoint_names(cls):
-        try:
-            from py.services.service_registry import ServiceRegistry
-            from py.utils.utils import _format_model_name_for_comfyui
-            
-            async def _get_names():
-                scanner = await ServiceRegistry.get_checkpoint_scanner()
-                cache = await scanner.get_cached_data()
-                model_roots = scanner.get_model_roots()
-
-                names = []
-                for item in cache.raw_data:
-                    # filter by checkpoint sub_type
-                    if item.get("sub_type") == "checkpoint":
-                        file_path = item.get("file_path", "")
-                        if file_path:
-                            formatted_name = _format_model_name_for_comfyui(file_path, model_roots)
-                            if formatted_name:
-                                names.append(formatted_name)
-                return sorted(names)
-
-            loop = asyncio.get_running_loop()
-            import concurrent.futures
-            
-            def run_in_thread():
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                try:
-                    return new_loop.run_until_complete(_get_names())
-                finally:
-                    new_loop.close()
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result()
-        except Exception as e:
-            logger.error(f"[CheckpointCycler] Error getting checkpoint names for UI: {e}")
-            return []
-
-    @classmethod
     def INPUT_TYPES(cls):
-        # We fetch ckpt names to populate the manual override combo box.
-        names = cls._get_checkpoint_names()
+        # We fetch full checkpoint names from standard comfy folder_paths to populate the manual combo box effortlessly without booting the Vue scanner async.
+        names = folder_paths.get_filename_list("checkpoints")
         return {
             "required": {
                 "ckpt_name": (["Auto (Cycle)"] + names, {"default": "Auto (Cycle)"}),
-                "base_model": (["Any", "SD1.5", "SDXL", "SD3", "Flux", "SDXL-Turbo", "Pony", "HunyuanVideo", "Unknown"], {"default": "Any"}),
+                "base_models": ("STRING", {"default": "Any", "multiline": False}),
                 "tags_include": ("STRING", {"default": ""}),
                 "tags_exclude": ("STRING", {"default": ""}),
-                "folders_include": ("STRING", {"default": ""}),
-                "folders_exclude": ("STRING", {"default": ""}),
+                "folders_include": ("STRING", {"default": "", "multiline": False}),
+                "folders_exclude": ("STRING", {"default": "", "multiline": False}),
                 "repeats": ("INT", {"default": 1, "min": 1, "max": 9999}),
                 "current_index": ("INT", {"default": 1, "min": 1, "max": 999999}),
             },
@@ -78,12 +38,13 @@ class CheckpointCyclerCU:
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("CKPT_NAME", "TAGS")
+    # Returning folder_paths checklist type explicitly ensures NATIVE WIRING to Load Checkpoints ckpt_name!
+    RETURN_TYPES = (folder_paths.get_filename_list("checkpoints"), "STRING", "INT")
+    RETURN_NAMES = ("CKPT_NAME", "TAGS", "TOTAL_MODELS")
     FUNCTION = "cycle"
     OUTPUT_NODE = False
 
-    def cycle(self, ckpt_name, base_model, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt=""):
+    def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt=""):
         from py.services.service_registry import ServiceRegistry
         from py.utils.utils import _format_model_name_for_comfyui
         import asyncio
@@ -96,8 +57,9 @@ class CheckpointCyclerCU:
             # Pre-parse filters
             inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip()]
             exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip()]
-            inc_f = [f.strip().lower() for f in folders_include.split(',') if f.strip()]
-            exc_f = [f.strip().lower() for f in folders_exclude.split(',') if f.strip()]
+            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip() and f.strip() != "Any"]
+            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip() and f.strip() != "Any"]
+            b_models = [b.strip() for b in base_models.split(',') if b.strip()]
             
             filtered = []
             for item in cache.raw_data:
@@ -106,7 +68,7 @@ class CheckpointCyclerCU:
                     
                 # Base model filter
                 item_base = str(item.get("base_model", "Unknown"))
-                if base_model != "Any" and item_base != base_model:
+                if "Any" not in b_models and b_models and item_base not in b_models:
                     continue
                 
                 # Tags Filter
@@ -117,14 +79,20 @@ class CheckpointCyclerCU:
                     continue
                     
                 # Folders Filter
-                folder = str(item.get("folder", "")).lower()
+                file_path = item.get("file_path", "")
+                formatted_name = _format_model_name_for_comfyui(file_path, model_roots)
+                
+                folder = ""
+                if formatted_name:
+                    if "/" in formatted_name:
+                        folder = formatted_name.rsplit("/", 1)[0].lower()
+                    elif "\\" in formatted_name:
+                        folder = formatted_name.rsplit("\\", 1)[0].lower()
+                        
                 if inc_f and not any(f in folder for f in inc_f):
                     continue
                 if exc_f and any(f in folder for f in exc_f):
                     continue
-                    
-                file_path = item.get("file_path", "")
-                formatted_name = _format_model_name_for_comfyui(file_path, model_roots)
                 
                 if formatted_name:
                     filtered.append({
@@ -146,9 +114,8 @@ class CheckpointCyclerCU:
         
         if not models:
             logger.warning("[CheckpointCycler] No models found matching the filters!")
-            # Fallback to an empty string to prevent total crash, or default Checkpoint
             return {
-                "result": ("", ""),
+                "result": ("", "", 0),
                 "ui": {
                     "last_selected_ckpt": [""],
                     "current_index": [current_index],
@@ -158,7 +125,6 @@ class CheckpointCyclerCU:
 
         # 1. Manual check
         if ckpt_name != "Auto (Cycle)":
-            # Attempt to find the manual checkpoint tags if possible
             matched_tags = ""
             for m in models:
                 if m["name"] == ckpt_name:
@@ -166,19 +132,15 @@ class CheckpointCyclerCU:
                     break
             
             return {
-                "result": (ckpt_name, matched_tags),
+                "result": (ckpt_name, matched_tags, len(models)),
                 "ui": {
                     "last_selected_ckpt": [ckpt_name],
-                    "current_index": [current_index], # leave index untouched
+                    "current_index": [current_index],
                     "total_count": [len(models)]
                 }
             }
 
         # 2. Cycle Logic
-        # We compute the effective index mapping.
-        # math: (current_index - 1) // repeats
-        # then we map that to the list size.
-        
         real_idx = max(0, current_index - 1)
         cycle_idx = (real_idx // max(1, repeats)) % len(models)
         
@@ -186,11 +148,10 @@ class CheckpointCyclerCU:
         selected_name = selected["name"]
         selected_tags = selected["tags"]
         
-        # Determine the next index to pass to frontend for updating
         next_index = current_index + 1
         
         return {
-            "result": (selected_name, selected_tags),
+            "result": (selected_name, selected_tags, len(models)),
             "ui": {
                 "last_selected_ckpt": [selected_name],
                 "current_index": [next_index],
