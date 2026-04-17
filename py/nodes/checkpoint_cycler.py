@@ -22,7 +22,7 @@ async def get_metadata():
         model_roots = scanner.get_model_roots()
         
         base_models = set(["Any"])
-        tags = set()
+        tags = set(["[Clear]"]) # Added explicit clear option for the JS appending logic
         
         checkpoints = []
         for item in cache.raw_data:
@@ -66,7 +66,8 @@ async def get_metadata():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"base_models": ["Any"], "tags": [], "checkpoints": []}
+        return {"base_models": ["[Clear]", "Any"], "tags": ["[Clear]"], "checkpoints": []}
+
 
 class CheckpointCyclerCU:
     """Unified Checkpoint Cycler node with builtin filters and state tracking."""
@@ -77,14 +78,25 @@ class CheckpointCyclerCU:
     @classmethod
     def INPUT_TYPES(cls):
         names = folder_paths.get_filename_list("checkpoints")
+        
+        folders = set()
+        for c in names:
+            if "/" in c:
+                folders.add(c.rsplit("/", 1)[0].lower())
+            elif "\\" in c:
+                folders.add(c.rsplit("\\", 1)[0].lower())
+                
+        folder_list = ["[Clear]", "Any"] + sorted(list(folders))
+        base_model_list = ["[Clear]", "Any", "SD1.5", "SDXL", "SD3", "Flux", "SDXL-Turbo", "Pony", "HunyuanVideo", "Unknown"]
+        
         return {
             "required": {
                 "ckpt_name": (["Auto (Cycle)"] + names, {"default": "Auto (Cycle)"}),
-                "base_models": ("STRING", {"default": "Any", "multiline": False}),
-                "tags_include": ("STRING", {"default": ""}),
-                "tags_exclude": ("STRING", {"default": ""}),
-                "folders_include": ("STRING", {"default": "", "multiline": False}),
-                "folders_exclude": ("STRING", {"default": "", "multiline": False}),
+                "base_models": (base_model_list, {"default": "Any"}),
+                "tags_include": (["[Clear]", "Any"], {"default": "Any"}),
+                "tags_exclude": (["[Clear]", "Any"], {"default": "Any"}),
+                "folders_include": (folder_list, {"default": "Any"}),
+                "folders_exclude": (folder_list, {"default": "Any"}),
                 "repeats": ("INT", {"default": 1, "min": 1, "max": 9999}),
                 "current_index": ("INT", {"default": 1, "min": 1, "max": 999999}),
             },
@@ -109,11 +121,11 @@ class CheckpointCyclerCU:
             cache = await scanner.get_cached_data()
             model_roots = scanner.get_model_roots()
             
-            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip()]
-            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip()]
-            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip() and f.strip() != "Any"]
-            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip() and f.strip() != "Any"]
-            b_models = [b.strip() for b in base_models.split(',') if b.strip()]
+            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip() and t.strip() != "any" and t.strip() != "[clear]"]
+            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip() and t.strip() != "any" and t.strip() != "[clear]"]
+            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip() and f.strip() != "any" and f.strip() != "[clear]"]
+            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip() and f.strip() != "any" and f.strip() != "[clear]"]
+            b_models = [b.strip() for b in base_models.split(',') if b.strip() and b.strip() != "[clear]"]
             
             filtered = []
             for item in cache.raw_data:
