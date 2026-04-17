@@ -43,7 +43,7 @@ async def get_metadata():
         
         checkpoints = []
         for item in cache.raw_data:
-            if item.get("sub_type") != "checkpoint":
+            if item.get("sub_type") not in ("checkpoint", "diffusion_model"):
                 continue
                 
             file_path = item.get("file_path", "")
@@ -150,15 +150,15 @@ class CheckpointCyclerCU:
             cache = await scanner.get_cached_data()
             model_roots = scanner.get_model_roots()
             
-            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip()]
-            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip()]
-            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip()]
-            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip()]
-            b_models = [b.strip() for b in base_models.split(',') if b.strip()]
+            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip() and t.strip().lower() not in ("any", "[clear]")]
+            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip() and t.strip().lower() not in ("any", "[clear]")]
+            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip() and f.strip().lower() not in ("any", "[clear]")]
+            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip() and f.strip().lower() not in ("any", "[clear]")]
+            b_models = [b.strip() for b in base_models.split(',') if b.strip() and b.strip().lower() not in ("any", "[clear]")]
             
             filtered = []
             for item in cache.raw_data:
-                if item.get("sub_type") != "checkpoint":
+                if item.get("sub_type") not in ("checkpoint", "diffusion_model"):
                     continue
                     
                 item_base = str(item.get("base_model", "Unknown"))
