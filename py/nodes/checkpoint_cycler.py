@@ -17,6 +17,18 @@ if os.path.exists(lora_manager_path) and lora_manager_path not in sys.path:
 
 logger = logging.getLogger(__name__)
 
+def _get_service_registry():
+    import sys
+    # Search loaded modules to avoid creating duplicate singleton scopes on 'py' namespaces
+    for module_name, module in sys.modules.items():
+        if module_name.endswith("py.services.service_registry"):
+            if hasattr(module, "ServiceRegistry"):
+                return module.ServiceRegistry
+                
+    # Fallback if not physically located
+    from py.services.service_registry import ServiceRegistry
+    return ServiceRegistry
+
 def _format_model_name_for_comfyui_local(file_path: str, model_roots: list) -> str:
     for root in model_roots:
         try:
@@ -32,8 +44,8 @@ def _format_model_name_for_comfyui_local(file_path: str, model_roots: list) -> s
 
 async def get_metadata():
     """Fetches full cached checkpoints database and compiles base models and tags for the JS UI."""
-    from py.services.service_registry import ServiceRegistry
     try:
+        ServiceRegistry = _get_service_registry()
         scanner = await ServiceRegistry.get_checkpoint_scanner()
         cache = await scanner.get_cached_data()
         model_roots = scanner.get_model_roots()
@@ -142,10 +154,10 @@ class CheckpointCyclerCU:
         return True
 
     def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt=""):
-        from py.services.service_registry import ServiceRegistry
         import asyncio
         
         async def _get_models():
+            ServiceRegistry = _get_service_registry()
             scanner = await ServiceRegistry.get_checkpoint_scanner()
             cache = await scanner.get_cached_data()
             model_roots = scanner.get_model_roots()
