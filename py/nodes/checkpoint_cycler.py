@@ -196,12 +196,20 @@ class CheckpointCyclerCU:
             return filtered
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
+            import concurrent.futures
+            def run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(_get_models())
+                finally:
+                    new_loop.close()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                models = future.result()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        models = loop.run_until_complete(_get_models())
+            models = asyncio.run(_get_models())
         
         if not models:
             logger.warning("[CheckpointCycler] No models found matching the filters!")
