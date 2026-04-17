@@ -6,12 +6,20 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 lora_manager_path = os.path.join(current_dir, "lora-manager")
 
 if lora_manager_path not in sys.path:
-    # Prepend to prioritize this lora-manager if there are conflicts
     sys.path.insert(0, lora_manager_path)
 
-# Import the Node Class
-from .py.nodes.checkpoint_cycler import CheckpointCyclerCU
-from .py.nodes.tag_parser import TagParserCU
+from server import PromptServer
+from aiohttp import web
+from .py.nodes.checkpoint_cycler import CheckpointCyclerCU, get_metadata
+from .py.nodes.tag_parser import TagParserCU  # Brought over from the user's recent modifications
+
+@PromptServer.instance.routes.get("/comfyui-ckpt-utils/cycler-metadata")
+async def fetch_cycler_metadata(request):
+    try:
+        data = await get_metadata()
+        return web.json_response(data)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 NODE_CLASS_MAPPINGS = {
     CheckpointCyclerCU.NAME: CheckpointCyclerCU,

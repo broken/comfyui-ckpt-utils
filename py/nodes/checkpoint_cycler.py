@@ -2,6 +2,7 @@ import logging
 import folder_paths
 import os
 import sys
+import asyncio
 
 # Ensure lora-manager is in path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -11,6 +12,62 @@ if lora_manager_path not in sys.path:
 
 logger = logging.getLogger(__name__)
 
+async def get_metadata():
+    """Fetches full cached checkpoints database and compiles base models and tags for the JS UI."""
+    from py.services.service_registry import ServiceRegistry
+    from py.utils.utils import _format_model_name_for_comfyui
+    try:
+        scanner = await ServiceRegistry.get_checkpoint_scanner()
+        cache = await scanner.get_cached_data()
+        model_roots = scanner.get_model_roots()
+        
+        base_models = set(["Any"])
+        tags = set()
+        
+        checkpoints = []
+        for item in cache.raw_data:
+            if item.get("sub_type") != "checkpoint":
+                continue
+                
+            file_path = item.get("file_path", "")
+            formatted_name = _format_model_name_for_comfyui(file_path, model_roots)
+            if not formatted_name:
+                continue
+
+            bm = str(item.get("base_model", "Unknown"))
+            if bm:
+                base_models.add(bm)
+                
+            model_tags = []
+            for t in item.get("tags", []):
+                if t:
+                    tag_str = str(t).lower().strip()
+                    tags.add(tag_str)
+                    model_tags.append(tag_str)
+                    
+            folder = ""
+            if "/" in formatted_name:
+                folder = formatted_name.rsplit("/", 1)[0].lower()
+            elif "\\" in formatted_name:
+                folder = formatted_name.rsplit("\\", 1)[0].lower()
+                    
+            checkpoints.append({
+                "name": formatted_name,
+                "base_model": bm,
+                "tags": model_tags,
+                "folder": folder
+            })
+                    
+        return {
+            "base_models": sorted(list(base_models)),
+            "tags": sorted(list(tags)),
+            "checkpoints": checkpoints
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"base_models": ["Any"], "tags": [], "checkpoints": []}
+
 class CheckpointCyclerCU:
     """Unified Checkpoint Cycler node with builtin filters and state tracking."""
 
@@ -19,7 +76,6 @@ class CheckpointCyclerCU:
 
     @classmethod
     def INPUT_TYPES(cls):
-        # We fetch full checkpoint names from standard comfy folder_paths to populate the manual combo box effortlessly without booting the Vue scanner async.
         names = folder_paths.get_filename_list("checkpoints")
         return {
             "required": {
@@ -38,7 +94,6 @@ class CheckpointCyclerCU:
             }
         }
 
-    # Returning folder_paths checklist type explicitly ensures NATIVE WIRING to Load Checkpoints ckpt_name!
     RETURN_TYPES = (folder_paths.get_filename_list("checkpoints"), "STRING", "INT")
     RETURN_NAMES = ("CKPT_NAME", "TAGS", "TOTAL_MODELS")
     FUNCTION = "cycle"
@@ -54,7 +109,6 @@ class CheckpointCyclerCU:
             cache = await scanner.get_cached_data()
             model_roots = scanner.get_model_roots()
             
-            # Pre-parse filters
             inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip()]
             exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip()]
             inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip() and f.strip() != "Any"]
@@ -66,19 +120,16 @@ class CheckpointCyclerCU:
                 if item.get("sub_type") != "checkpoint":
                     continue
                     
-                # Base model filter
                 item_base = str(item.get("base_model", "Unknown"))
                 if "Any" not in b_models and b_models and item_base not in b_models:
                     continue
                 
-                # Tags Filter
                 model_tags = [str(t).strip().lower() for t in item.get("tags", [])]
                 if inc_t and not all(t in model_tags for t in inc_t):
                     continue
                 if exc_t and any(t in model_tags for t in exc_t):
                     continue
                     
-                # Folders Filter
                 file_path = item.get("file_path", "")
                 formatted_name = _format_model_name_for_comfyui(file_path, model_roots)
                 
@@ -100,7 +151,6 @@ class CheckpointCyclerCU:
                         "tags": ", ".join([str(t) for t in item.get("tags", [])])
                     })
                     
-            # Sort by name alphabetically to ensure deterministic cycling
             filtered.sort(key=lambda x: x["name"].lower())
             return filtered
 
@@ -123,7 +173,6 @@ class CheckpointCyclerCU:
                 }
             }
 
-        # 1. Manual check
         if ckpt_name != "Auto (Cycle)":
             matched_tags = ""
             for m in models:
@@ -140,7 +189,6 @@ class CheckpointCyclerCU:
                 }
             }
 
-        # 2. Cycle Logic
         real_idx = max(0, current_index - 1)
         cycle_idx = (real_idx // max(1, repeats)) % len(models)
         
