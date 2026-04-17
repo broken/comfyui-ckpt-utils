@@ -1,21 +1,38 @@
 import { app } from "../../scripts/app.js";
 
 let cyclerMetadata = null;
+let fetchOngoing = null;
 
 async function fetchMetadata() {
-    if (cyclerMetadata) return cyclerMetadata;
-    try {
-        const response = await fetch("/comfyui-ckpt-utils/cycler-metadata");
-        cyclerMetadata = await response.json();
-    } catch (e) {
-        console.error("Failed to fetch cycler metadata", e);
-        cyclerMetadata = { base_models: ["Any"], tags: [], checkpoints: [] };
+    // If we already have a populated cache, use it!
+    // But if checkpoints are empty, maybe the LoraManager backend scanner hasn't finished, so retry.
+    if (cyclerMetadata && cyclerMetadata.checkpoints && cyclerMetadata.checkpoints.length > 0) {
+        return cyclerMetadata;
     }
-    return cyclerMetadata;
+    
+    if (fetchOngoing) return await fetchOngoing;
+    
+    fetchOngoing = (async () => {
+        try {
+            const response = await fetch("/comfyui-ckpt-utils/cycler-metadata");
+            const json = await response.json();
+            if (json.error) {
+                console.error("API Error: ", json.error);
+            } else {
+                cyclerMetadata = json;
+            }
+        } catch (e) {
+            console.error("Failed to fetch cycler metadata", e);
+        }
+        fetchOngoing = null;
+        return cyclerMetadata || { base_models: ["Any"], tags: [], checkpoints: [] };
+    })();
+    
+    return await fetchOngoing;
 }
 
 function calculateMatches(node, overrideKey, overrideValue) {
-    if (!cyclerMetadata) return 0;
+    if (!cyclerMetadata || !cyclerMetadata.checkpoints) return 0;
     
     const getVal = (name) => {
         if (name === overrideKey) return overrideValue;
@@ -23,26 +40,26 @@ function calculateMatches(node, overrideKey, overrideValue) {
         return w ? w.value : "";
     };
 
-    const b_models = getVal("base_models").split(",").map(x => x.trim()).filter(x => x);
-    const inc_t = getVal("tags_include").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
-    const exc_t = getVal("tags_exclude").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
-    const inc_f = getVal("folders_include").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any");
-    const exc_f = getVal("folders_exclude").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any");
+    const b_models = (getVal("base_models") || "").split(",").map(x => x.trim()).filter(x => x);
+    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any");
+    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any");
 
     let count = 0;
     for (let c of cyclerMetadata.checkpoints) {
         if (!b_models.includes("Any") && b_models.length > 0 && !b_models.includes(c.base_model)) continue;
         
-        let hasIncT = inc_t.length === 0 || inc_t.every(t => c.tags.includes(t));
+        let hasIncT = inc_t.length === 0 || inc_t.every(t => c.tags && c.tags.includes(t));
         if (!hasIncT) continue;
         
-        let hasExcT = exc_t.length > 0 && exc_t.some(t => c.tags.includes(t));
+        let hasExcT = exc_t.length > 0 && exc_t.some(t => c.tags && c.tags.includes(t));
         if (hasExcT) continue;
         
-        let hasIncF = inc_f.length === 0 || inc_f.some(f => c.folder.includes(f));
+        let hasIncF = inc_f.length === 0 || inc_f.some(f => c.folder && c.folder.includes(f));
         if (!hasIncF) continue;
         
-        let hasExcF = exc_f.length > 0 && exc_f.some(f => c.folder.includes(f));
+        let hasExcF = exc_f.length > 0 && exc_f.some(f => c.folder && c.folder.includes(f));
         if (hasExcF) continue;
         
         count++;
@@ -88,7 +105,7 @@ function showMultiSelectDropdown(x, y, options, currentSelectionStr, node, targe
     listDiv.style.overflowY = "auto";
     div.appendChild(listDiv);
 
-    const currentSet = new Set(currentSelectionStr.split(",").map(s => s.trim()).filter(s => s));
+    const currentSet = new Set((currentSelectionStr || "").split(",").map(s => s.trim()).filter(s => s));
     const checkmap = {};
     const rowEls = [];
 
@@ -156,7 +173,7 @@ function showMultiSelectDropdown(x, y, options, currentSelectionStr, node, targe
         onSave(selected.join(", "));
         div.remove();
         window._myMultiSelectModal = null;
-        updateMatches(); // Ensure the node has correct state synced
+        updateMatches(); 
     };
 
     closeBtn.onclick = doSave;
@@ -165,7 +182,6 @@ function showMultiSelectDropdown(x, y, options, currentSelectionStr, node, targe
     document.body.appendChild(div);
     searchInput.focus();
 
-    // Close when clicking strictly outside
     const clickOutside = (e) => {
         if (!div.contains(e.target)) {
             doSave();
@@ -185,15 +201,19 @@ app.registerExtension({
             nodeType.prototype.onNodeCreated = function () {
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
-                // Fetch metadata asynchronously for the counts
-                fetchMetadata().then(() => {
+                // Fetch metadata asynchronously for the counts over short retry laps
+                const initialPoll = async () => {
+                    await fetchMetadata();
                     let mWidget = this.widgets.find(w => w.name === "total_matching_models");
-                    if (mWidget) {
+                    if (mWidget && cyclerMetadata && cyclerMetadata.checkpoints.length > 0) {
                         mWidget.value = `Available cycle matches: ${calculateMatches(this)}`;
+                    } else if (mWidget) {
+                        mWidget.value = "Pending background scanner...";
+                        setTimeout(initialPoll, 2000);
                     }
-                });
+                };
+                initialPoll();
 
-                // Matching models display static widget
                 this.addWidget("text", "total_matching_models", "Fetching database...", () => {});
                 const mw = this.widgets.find(w => w.name === "total_matching_models");
                 if (mw && mw.inputEl) {
@@ -202,48 +222,19 @@ app.registerExtension({
                     mw.inputEl.style.fontWeight = "bold";
                 }
 
-                // Modify target widgets to look and act like combos but multi-select
                 const targetWidgets = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
                 this.widgets.forEach(w => {
-                    // clean up previous button widgets if reloading visually
+                    // Fallback cleanse for btn widgets
                     if (w.name.startsWith("btn_")) {
                         w.type = "hidden";
                         w.computeSize = () => [0,-4];
                     }
 
                     if (targetWidgets.includes(w.name)) {
-                        w.type = "custom_multi_combo";
+                        w.type = "combo";
+                        w.options = w.options || {};
+                        w.options.values = w.options.values || ["Any"];
                         
-                        // Fake Combo Canvas Renderer
-                        w.draw = function(ctx, node, width, y, H) {
-                            ctx.fillStyle = "#222"; // default bg
-                            ctx.beginPath();
-                            ctx.roundRect(15, y, width - 30, H, 4);
-                            ctx.fill();
-                            
-                            // Field Name
-                            ctx.fillStyle = "#AAA"; // label color
-                            ctx.font = "12px Arial";
-                            ctx.textAlign = "left";
-                            ctx.fillText(w.name, 20, y + H * 0.7);
-                            
-                            // Selection string
-                            ctx.fillStyle = "#DDD";
-                            ctx.textAlign = "right";
-                            let valStr = w.value || "Any";
-                            if (valStr.length > 20) valStr = valStr.substring(0, 17) + "...";
-                            ctx.fillText(valStr, width - 35, y + H * 0.7);
-                            
-                            // Arrow
-                            ctx.fillStyle = "#AAA";
-                            ctx.beginPath();
-                            ctx.moveTo(width - 25, y + H * 0.35);
-                            ctx.lineTo(width - 15, y + H * 0.35);
-                            ctx.lineTo(width - 20, y + H * 0.65);
-                            ctx.fill();
-                        };
-                        
-                        // Override mouse to spawn absolute dropdown Menu
                         const origMouse = w.mouse;
                         w.mouse = function(event, pos, node) {
                             if (event.type === "mousedown") {
@@ -252,32 +243,36 @@ app.registerExtension({
                                 const offset_x = rect.left + (node.pos[0] + 15) * canvas.scale + canvas.offset[0] * canvas.scale;
                                 const offset_y = rect.top + (node.pos[1] + pos[1] + 25) * canvas.scale + canvas.offset[1] * canvas.scale;
                                 
-                                let options = [];
-                                if (w.name === "base_models") {
-                                    options = cyclerMetadata ? cyclerMetadata.base_models : ["Any"];
-                                } else if (w.name.startsWith("tags_")) {
-                                    options = cyclerMetadata ? cyclerMetadata.tags : [];
-                                } else if (w.name.startsWith("folders_")) {
-                                    const ckptWidget = node.widgets.find((x) => x.name === "ckpt_name");
-                                    if (!ckptWidget) options = ["Any"];
-                                    else {
-                                        const allCkpts = ckptWidget.options.values.filter(v => v !== "Auto (Cycle)");
-                                        let folders = new Set();
-                                        folders.add("Any");
-                                        allCkpts.forEach(c => {
-                                            let parts = c.split(/[\\/]/);
-                                            if(parts.length > 1) {
-                                                folders.add(parts.slice(0, -1).join("/"));
-                                            }
-                                        });
-                                        options = Array.from(folders).sort();
+                                // Fetch safely straight off the click event, retrieving dynamically
+                                fetchMetadata().then(md => {
+                                    let options = [];
+                                    if (w.name === "base_models") {
+                                        options = md.base_models || ["Any"];
+                                    } else if (w.name.startsWith("tags_")) {
+                                        options = md.tags || [];
+                                    } else if (w.name.startsWith("folders_")) {
+                                        const ckptWidget = node.widgets.find((x) => x.name === "ckpt_name");
+                                        if (!ckptWidget) options = ["Any"];
+                                        else {
+                                            const allCkpts = (ckptWidget.options?.values || []).filter(v => v !== "Auto (Cycle)");
+                                            let folders = new Set();
+                                            folders.add("Any");
+                                            allCkpts.forEach(c => {
+                                                let parts = c.split(/[\\/]/);
+                                                if(parts.length > 1) {
+                                                    folders.add(parts.slice(0, -1).join("/"));
+                                                }
+                                            });
+                                            options = Array.from(folders).sort();
+                                        }
                                     }
-                                }
 
-                                showMultiSelectDropdown(offset_x, offset_y, options, w.value, node, w.name, (newVal) => {
-                                    if (!newVal) newVal = "Any";
-                                    w.value = newVal;
-                                    app.graph.setDirtyCanvas(true, true);
+                                    // Display with populated options
+                                    showMultiSelectDropdown(offset_x, offset_y, options, w.value, node, w.name, (newVal) => {
+                                        if (!newVal) newVal = "Any";
+                                        w.value = newVal;
+                                        app.graph.setDirtyCanvas(true, true);
+                                    });
                                 });
                                 return true;
                             }
@@ -286,7 +281,6 @@ app.registerExtension({
                     }
                 });
 
-                // Add Reset Cycle Button
                 this.addWidget("button", "reset_cycle", "Restart Cycle (Set index to 1)", () => {
                     const currentIndexWidget = this.widgets.find((w) => w.name === "current_index");
                     if (currentIndexWidget) {
