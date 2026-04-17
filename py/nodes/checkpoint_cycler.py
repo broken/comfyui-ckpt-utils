@@ -17,10 +17,22 @@ if os.path.exists(lora_manager_path) and lora_manager_path not in sys.path:
 
 logger = logging.getLogger(__name__)
 
+def _format_model_name_for_comfyui_local(file_path: str, model_roots: list) -> str:
+    for root in model_roots:
+        try:
+            norm_file = os.path.normcase(os.path.abspath(file_path))
+            norm_root = os.path.normcase(os.path.abspath(root))
+            if not norm_root.endswith(os.sep):
+                norm_root += os.sep
+            if norm_file.startswith(norm_root):
+                return os.path.relpath(file_path, root).replace("\\", "/")
+        except Exception:
+            continue
+    return os.path.basename(file_path)
+
 async def get_metadata():
     """Fetches full cached checkpoints database and compiles base models and tags for the JS UI."""
     from py.services.service_registry import ServiceRegistry
-    from py.utils.utils import _format_model_name_for_comfyui
     try:
         scanner = await ServiceRegistry.get_checkpoint_scanner()
         cache = await scanner.get_cached_data()
@@ -35,7 +47,7 @@ async def get_metadata():
                 continue
                 
             file_path = item.get("file_path", "")
-            formatted_name = _format_model_name_for_comfyui(file_path, model_roots)
+            formatted_name = _format_model_name_for_comfyui_local(file_path, model_roots)
             if not formatted_name:
                 continue
 
@@ -131,7 +143,6 @@ class CheckpointCyclerCU:
 
     def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt=""):
         from py.services.service_registry import ServiceRegistry
-        from py.utils.utils import _format_model_name_for_comfyui
         import asyncio
         
         async def _get_models():
@@ -161,7 +172,7 @@ class CheckpointCyclerCU:
                     continue
                     
                 file_path = item.get("file_path", "")
-                formatted_name = _format_model_name_for_comfyui(file_path, model_roots)
+                formatted_name = _format_model_name_for_comfyui_local(file_path, model_roots)
                 
                 folder = ""
                 if formatted_name:
