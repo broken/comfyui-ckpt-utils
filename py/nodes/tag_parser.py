@@ -25,10 +25,18 @@ class TagParserCU:
         target_prefix = f"{label}:"
         found_val_str = None
         
+        # Priority 1: Exact label:value match
         for tag in tag_list:
             if tag.startswith(target_prefix):
                 found_val_str = tag[len(target_prefix):].strip()
                 break
+        
+        # Priority 2: Presence check (exact label match)
+        if found_val_str is None:
+            for tag in tag_list:
+                if tag.lower() == label.lower():
+                    found_val_str = "true"
+                    break
                 
         if found_val_str is None:
             found_val_str = default
