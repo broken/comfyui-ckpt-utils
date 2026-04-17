@@ -18,7 +18,7 @@ async function fetchMetadata() {
             console.error("Failed to fetch cycler metadata", e);
         }
         fetchOngoing = null;
-        return cyclerMetadata || { base_models: ["[Clear]", "Any"], tags: ["[Clear]", "Any"], checkpoints: [] };
+        return cyclerMetadata || { base_models: [""], tags: [""], checkpoints: [] };
     })();
     return await fetchOngoing;
 }
@@ -32,15 +32,15 @@ function calculateMatches(node, overrideKey, overrideValue) {
         return w ? w.value : "";
     };
 
-    const b_models = (getVal("base_models") || "").split(",").map(x => x.trim()).filter(x => x && x !== "[Clear]");
-    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
-    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
-    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
-    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
+    const b_models = (getVal("base_models") || "").split(",").map(x => x.trim()).filter(x => x);
+    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
 
     let count = 0;
     for (let c of cyclerMetadata.checkpoints) {
-        if (!b_models.includes("Any") && b_models.length > 0 && !b_models.includes(c.base_model)) continue;
+        if (b_models.length > 0 && !b_models.includes(c.base_model)) continue;
         
         let hasIncT = inc_t.length === 0 || inc_t.every(t => c.tags && c.tags.includes(t));
         if (!hasIncT) continue;
@@ -83,8 +83,8 @@ app.registerExtension({
                         // Dynamically update tags now that metadata is fetched
                         const ti = this.widgets.find(w => w.name === "tags_include");
                         const te = this.widgets.find(w => w.name === "tags_exclude");
-                        if(ti && ti.options) ti.options.values = ["[Clear]", "Any"].concat(cyclerMetadata.tags.filter(t => t !== "[Clear]" && t !== "Any"));
-                        if(te && te.options) te.options.values = ["[Clear]", "Any"].concat(cyclerMetadata.tags.filter(t => t !== "[Clear]" && t !== "Any"));
+                        if(ti && ti.options) ti.options.values = [""].concat(cyclerMetadata.tags.filter(t => t !== "[Clear]" && t !== "Any" && t !== ""));
+                        if(te && te.options) te.options.values = [""].concat(cyclerMetadata.tags.filter(t => t !== "[Clear]" && t !== "Any" && t !== ""));
                     } else if (mWidget) {
                         mWidget.value = "Pending background scanner...";
                         setTimeout(initialPoll, 2000);
@@ -105,10 +105,10 @@ app.registerExtension({
                     if (multiCombos.includes(w.name)) {
                         const origCallback = w.callback;
                         w.callback = function(value) {
-                            if (value === "Any" || value === "[Clear]") {
-                                w.value = "Any"; 
+                            if (!value || value.trim() === "") {
+                                w.value = ""; 
                             } else {
-                                const current = w.value && w.value !== "Any" && w.value !== "[Clear]" ? w.value.split(",").map(s=>s.trim()) : [];
+                                const current = w.value && w.value.trim() !== "" ? w.value.split(",").map(s=>s.trim()) : [];
                                 if (!current.includes(value)) {
                                     current.push(value);
                                 }

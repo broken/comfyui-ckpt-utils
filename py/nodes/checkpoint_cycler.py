@@ -81,22 +81,30 @@ class CheckpointCyclerCU:
         
         folders = set()
         for c in names:
+            c = c.replace("\\", "/")
             if "/" in c:
-                folders.add(c.rsplit("/", 1)[0].lower())
-            elif "\\" in c:
-                folders.add(c.rsplit("\\", 1)[0].lower())
+                parts = c.split("/")[:-1]
+                for i in range(1, len(parts) + 1):
+                    folders.add("/".join(parts[:i]).lower())
                 
-        folder_list = ["[Clear]", "Any"] + sorted(list(folders))
-        base_model_list = ["[Clear]", "Any", "SD1.5", "SDXL", "SD3", "Flux", "SDXL-Turbo", "Pony", "HunyuanVideo", "Unknown"]
+        folder_list = [""] + sorted(list(folders))
+        
+        try:
+            from py.utils.model_utils import BASE_MODEL_MAPPING
+            b_list = sorted(list(set(BASE_MODEL_MAPPING.values())))
+        except ImportError:
+            b_list = ["SD 1.5", "SD 2.0", "SD 2.1", "SDXL 1.0", "Flux.1 D", "Illustrious", "Pony", "Hunyuan Video"]
+            
+        base_model_list = [""] + b_list + ["Unknown"]
         
         return {
             "required": {
                 "ckpt_name": (["Auto (Cycle)"] + names, {"default": "Auto (Cycle)"}),
-                "base_models": (base_model_list, {"default": "Any"}),
-                "tags_include": (["[Clear]", "Any"], {"default": "Any"}),
-                "tags_exclude": (["[Clear]", "Any"], {"default": "Any"}),
-                "folders_include": (folder_list, {"default": "Any"}),
-                "folders_exclude": (folder_list, {"default": "Any"}),
+                "base_models": (base_model_list, {"default": ""}),
+                "tags_include": ([""], {"default": ""}),
+                "tags_exclude": ([""], {"default": ""}),
+                "folders_include": (folder_list, {"default": ""}),
+                "folders_exclude": (folder_list, {"default": ""}),
                 "repeats": ("INT", {"default": 1, "min": 1, "max": 9999}),
                 "current_index": ("INT", {"default": 1, "min": 1, "max": 999999}),
             },
@@ -111,6 +119,11 @@ class CheckpointCyclerCU:
     FUNCTION = "cycle"
     OUTPUT_NODE = False
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        # Allow multi-select string concatenation to safely bypass standard combo box bounds
+        return True
+
     def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt=""):
         from py.services.service_registry import ServiceRegistry
         from py.utils.utils import _format_model_name_for_comfyui
@@ -121,11 +134,11 @@ class CheckpointCyclerCU:
             cache = await scanner.get_cached_data()
             model_roots = scanner.get_model_roots()
             
-            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip() and t.strip() != "any" and t.strip() != "[clear]"]
-            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip() and t.strip() != "any" and t.strip() != "[clear]"]
-            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip() and f.strip() != "any" and f.strip() != "[clear]"]
-            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip() and f.strip() != "any" and f.strip() != "[clear]"]
-            b_models = [b.strip() for b in base_models.split(',') if b.strip() and b.strip() != "[clear]"]
+            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip()]
+            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip()]
+            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip()]
+            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip()]
+            b_models = [b.strip() for b in base_models.split(',') if b.strip()]
             
             filtered = []
             for item in cache.raw_data:
@@ -133,7 +146,7 @@ class CheckpointCyclerCU:
                     continue
                     
                 item_base = str(item.get("base_model", "Unknown"))
-                if "Any" not in b_models and b_models and item_base not in b_models:
+                if b_models and item_base not in b_models:
                     continue
                 
                 model_tags = [str(t).strip().lower() for t in item.get("tags", [])]
