@@ -128,7 +128,7 @@ class CheckpointCyclerCU:
     RETURN_TYPES = (folder_paths.get_filename_list("checkpoints"), "STRING", "INT")
     RETURN_NAMES = ("CKPT_NAME", "TAGS", "TOTAL_MODELS")
     FUNCTION = "cycle"
-    OUTPUT_NODE = False
+    OUTPUT_NODE = True
 
     @classmethod
     def VALIDATE_INPUTS(cls, **kwargs):

@@ -211,32 +211,23 @@ function syncNodeLayout(node) {
         }
     }
 
-    var visible = [];
-    var hidden = [];
-
-    // 2. Classify and Clean Widgets
+    // 2. Hide specific widgets and their DOM layers
     node.widgets.forEach(function(w) {
         if (custom.indexOf(w.name) !== -1) {
             w.type = "hidden";
             w.draw = function() { return; };
             w.computeSize = function() { return [0, 0]; };
             
-            // Clean DOM references but don't climb parents here (handled by CSS)
+            // Just hide the DOM element, do not remove it (keeps order stable)
             if (w.inputEl) {
                 w.inputEl.style.display = "none";
                 w.inputEl.style.height = "0px";
-                w.inputEl = null;
+                w.inputEl.readOnly = true;
             }
-            hidden.push(w);
-        } else {
-            visible.push(w);
         }
     });
 
-    // 3. Reorder: Visible first, then hidden
-    node.widgets = visible.concat(hidden);
-    
-    // 4. Update Y Coordinates and Size
+    // 3. Force a layout re-calculation using official methods
     if (node.onComputeSize) {
         var sz = node.onComputeSize();
         node.setSize([Math.max(node.size[0], sz[0]), sz[1]]);
@@ -303,6 +294,9 @@ app.registerExtension({
                                 w.y = currentY;
                                 currentY += wh + 4;
                                 h = currentY;
+                            } else {
+                                // Put hidden widgets way off screen so they don't capture clicks
+                                w.y = -100;
                             }
                         });
                     }
@@ -446,14 +440,17 @@ app.registerExtension({
                 };
 
                 this.widgets = this.widgets.filter(function(w) { return w.type !== "button" || (!w.name.startsWith("+ Edit") && w.name !== "reset_cycle"); });
+                this.addWidget("button", "reset_cycle", "Restart Cycle", function() {
+                    const ciw = self.widgets.find(function(w) { return w.name === "current_index"; });
+                    if (ciw) {
+                        ciw.value = 0;
+                        if (ciw.callback) ciw.callback(0);
+                    }
+                });
 
                 requestAnimationFrame(function() {
                     if (!self.widgets.find(function(w) { return w.name === "cc_ui"; })) {
                         setupDOMWidget();
-                        self.addWidget("button", "reset_cycle", "Restart Cycle", function() {
-                            const ciw = self.widgets.find(function(w) { return w.name === "current_index"; });
-                            if (ciw) ciw.value = 0;
-                        });
                         app.graph.setDirtyCanvas(true, true);
                     }
                 });
@@ -480,11 +477,13 @@ app.registerExtension({
                 const ciw = self.widgets.find(function(w) { return w.name === "current_index"; });
                 
                 if (ciw && message) {
+                    console.log("[CheckpointCycler] onExecuted message received:", message);
                     // Python sends as a list [val], extract 0th element
                     const newIdx = Array.isArray(message.current_index) ? message.current_index[0] : message.current_index;
                     if (newIdx !== undefined) {
-                        console.log("[CheckpointCycler] Syncing current_index from server:", newIdx);
+                        console.log("[CheckpointCycler] Syncing current_index from server:", ciw.value, "->", newIdx);
                         ciw.value = newIdx;
+                        if (ciw.callback) ciw.callback(newIdx);
                     }
                 }
                 
