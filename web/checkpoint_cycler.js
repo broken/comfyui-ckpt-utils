@@ -1,5 +1,9 @@
 import { app } from "../../scripts/app.js";
 
+window.CHECKPOINT_CYCLER_LOADED = true;
+console.log("%c[CheckpointCycler] JS EXTENSION STARTING", "background: #222; color: #bada55; font-size: 20px;");
+console.log("[CheckpointCycler] Loading checkpoint_cycler.js extension...");
+
 let cyclerMetadata = null;
 let fetchOngoing = null;
 
@@ -28,30 +32,31 @@ function calculateMatches(node, overrideKey, overrideValue) {
     
     const getVal = (name) => {
         if (name === overrideKey) return overrideValue;
-        const w = node.widgets.find(x => x.name === name);
+        const w = node.widgets.find(function(x) { return x.name === name; });
         return w ? w.value : "";
     };
 
-    const b_models = (getVal("base_models") || "").split(",").map(x => x.trim()).filter(x => x);
-    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
-    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
-    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
-    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const b_models = (getVal("base_models") || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
 
     let count = 0;
-    for (let c of cyclerMetadata.checkpoints) {
+    for (let i = 0; i < cyclerMetadata.checkpoints.length; i++) {
+        const c = cyclerMetadata.checkpoints[i];
         if (b_models.length > 0 && !b_models.includes(c.base_model)) continue;
         
-        let hasIncT = inc_t.length === 0 || inc_t.every(t => c.tags && c.tags.includes(t));
+        const hasIncT = inc_t.length === 0 || inc_t.every(function(t) { return c.tags && c.tags.indexOf(t) !== -1; });
         if (!hasIncT) continue;
         
-        let hasExcT = exc_t.length > 0 && exc_t.some(t => c.tags && c.tags.includes(t));
+        const hasExcT = exc_t.length > 0 && exc_t.some(function(t) { return c.tags && c.tags.indexOf(t) !== -1; });
         if (hasExcT) continue;
         
-        let hasIncF = inc_f.length === 0 || inc_f.some(f => c.folder && c.folder.includes(f));
+        const hasIncF = inc_f.length === 0 || inc_f.some(function(f) { return c.folder && c.folder.indexOf(f) !== -1; });
         if (!hasIncF) continue;
         
-        let hasExcF = exc_f.length > 0 && exc_f.some(f => c.folder && c.folder.includes(f));
+        const hasExcF = exc_f.length > 0 && exc_f.some(function(f) { return c.folder && c.folder.indexOf(f) !== -1; });
         if (hasExcF) continue;
         
         count++;
@@ -59,141 +64,29 @@ function calculateMatches(node, overrideKey, overrideValue) {
     return count;
 }
 
-const styles = `
-.lm-modal-backdrop {
-    position: fixed; inset: 0; z-index: 9999;
-    background: rgba(0, 0, 0, 0.7); display: flex;
-    align-items: center; justify-content: center; backdrop-filter: blur(4px);
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-}
-.lm-modal {
-    background: #1e1e1e; border: 1px solid #333;
-    border-radius: 12px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-    width: 450px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column;
-    color: #eee; overflow: hidden;
-}
-.lm-modal-header {
-    display: flex; align-items: center; justify-content: space-between; padding: 20px 24px;
-    background: #252525; border-bottom: 1px solid #333;
-}
-.lm-modal-title { font-size: 18px; font-weight: 600; color: #fff; margin: 0; letter-spacing: -0.01em; }
-.lm-modal-close {
-    background: transparent; border: none; color: #888; font-size: 24px;
-    cursor: pointer; transition: color 0.2s, transform 0.2s; padding: 4px;
-}
-.lm-modal-close:hover { color: #fff; transform: scale(1.1); }
-.lm-modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 4px; }
-.lm-modal-search { 
-    width: 100%; padding: 12px 16px; background: #2a2a2a; border: 1px solid #444; 
-    border-radius: 8px; color: #fff; margin-bottom: 16px; box-sizing: border-box; 
-    transition: border-color 0.2s, box-shadow 0.2s; outline: none;
-}
-.lm-modal-search:focus { border-color: #4a9eff; box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2); }
-.lm-checkbox-item {
-    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
-    border-radius: 6px; cursor: pointer; color: #ccc; font-size: 14px;
-    transition: background 0.15s, color 0.15s;
-}
-.lm-checkbox-item:hover { background: #333; color: #fff; }
-.lm-checkbox-item input { margin: 0; width: 18px; height: 18px; cursor: pointer; accent-color: #4a9eff; }
-.lm-checkbox-count { opacity: 0.5; font-size: 12px; margin-left: auto; background: #2a2a2a; padding: 2px 8px; border-radius: 12px; }
-
-/* DOM Widget Styles */
-.cc-dom-container {
-    padding: 12px;
-    background: rgba(40, 44, 52, 0.6);
-    border-radius: 4px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    box-sizing: border-box;
-    font-family: 'Inter', system-ui, sans-serif;
-    color: #fff;
-    gap: 16px;
-}
-.cc-section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.cc-section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.cc-section-title {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    opacity: 0.6;
-}
-.cc-edit-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 6px;
-    background: transparent;
-    border: none;
-    color: inherit;
-    font-size: 11px;
-    cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.15s, background 0.15s;
-    border-radius: 3px;
-}
-.cc-edit-btn:hover {
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.05);
-}
-.cc-chips-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    min-height: 24px;
-}
-.cc-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    white-space: nowrap;
-    border: 1px solid transparent;
-}
-.cc-chip-base {
-    background: rgba(66, 153, 225, 0.15);
-    border-color: rgba(66, 153, 225, 0.4);
-    color: #4299e1;
-}
-.cc-chip-include {
-    background: rgba(16, 185, 129, 0.15);
-    border-color: rgba(16, 185, 129, 0.4);
-    color: #10b981;
-}
-.cc-chip-exclude {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #ef4444;
-}
-.cc-chip-count {
-    opacity: 0.6;
-    font-size: 10px;
-    margin-left: 4px;
-}
-.cc-empty {
-    font-size: 10px;
-    opacity: 0.3;
-    font-style: italic;
-    width: 100%;
-    text-align: center;
-    background: rgba(0,0,0,0.2);
-    padding: 6px;
-    border-radius: 4px;
-}
-`;
+const styles = ".lm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-family: sans-serif; } " +
+".lm-modal { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); width: 450px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column; color: #eee; overflow: hidden; } " +
+".lm-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: #252525; border-bottom: 1px solid #333; } " +
+".lm-modal-title { font-size: 18px; font-weight: 600; color: #fff; margin: 0; } " +
+".lm-modal-close { background: transparent; border: none; color: #888; font-size: 24px; cursor: pointer; padding: 4px; } " +
+".lm-modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 4px; } " +
+".lm-modal-search { width: 100%; padding: 12px 16px; background: #2a2a2a; border: 1px solid #444; border-radius: 8px; color: #fff; margin-bottom: 16px; box-sizing: border-box; outline: none; } " +
+".lm-checkbox-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 6px; cursor: pointer; color: #ccc; font-size: 14px; } " +
+".lm-checkbox-item:hover { background: #333; color: #fff; } " +
+".lm-checkbox-count { opacity: 0.5; font-size: 12px; margin-left: auto; background: #2a2a2a; padding: 2px 8px; border-radius: 12px; } " +
+".cc-dom-container { padding: 12px; background: rgba(40, 44, 52, 0.6); border-radius: 4px; height: 100%; display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box; color: #fff; gap: 16px; font-family: sans-serif; } " +
+".cc-section { display: flex; flex-direction: column; gap: 8px; } " +
+".cc-section-header { display: flex; align-items: center; justify-content: space-between; } " +
+".cc-section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; opacity: 0.6; } " +
+".cc-edit-btn { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; background: transparent; border: none; color: inherit; font-size: 11px; cursor: pointer; opacity: 0.6; border-radius: 3px; } " +
+".cc-edit-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.05); } " +
+".cc-chips-container { display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px; } " +
+".cc-chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; } " +
+".cc-chip-base { background: rgba(66, 153, 225, 0.15); border-color: rgba(66, 153, 225, 0.4); color: #4299e1; } " +
+".cc-chip-include { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #10b981; } " +
+".cc-chip-exclude { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #ef4444; } " +
+".cc-chip-count { opacity: 0.6; font-size: 10px; margin-left: 4px; } " +
+".cc-empty { font-size: 10px; opacity: 0.3; font-style: italic; width: 100%; text-align: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px; }";
 
 function injectStyles() {
     if (!document.getElementById("ckpt-cycler-styles")) {
@@ -208,7 +101,6 @@ function openModal(title, items, selectedItems, onSave) {
     injectStyles();
     
     let currentSelection = new Set(selectedItems);
-    
     const backdrop = document.createElement("div");
     backdrop.className = "lm-modal-backdrop";
     
@@ -217,7 +109,7 @@ function openModal(title, items, selectedItems, onSave) {
     
     const header = document.createElement("div");
     header.className = "lm-modal-header";
-    header.innerHTML = \`<h2 class="lm-modal-title">\${title}</h2><button class="lm-modal-close">&times;</button>\`;
+    header.innerHTML = '<h2 class="lm-modal-title">' + title + '</h2><button class="lm-modal-close">×</button>';
     
     const body = document.createElement("div");
     body.className = "lm-modal-body";
@@ -230,12 +122,13 @@ function openModal(title, items, selectedItems, onSave) {
     const listContainer = document.createElement("div");
     body.appendChild(listContainer);
     
-    const renderList = (filterText) => {
+    const renderList = function(filterText) {
         listContainer.innerHTML = "";
         const lowerFilter = filterText.toLowerCase();
         
-        items.forEach(item => {
-            if (lowerFilter && (item.name || "(Empty)").toLowerCase().indexOf(lowerFilter) === -1) return;
+        items.forEach(function(item) {
+            const name = item.name || "(Empty)";
+            if (lowerFilter && name.toLowerCase().indexOf(lowerFilter) === -1) return;
             
             const label = document.createElement("label");
             label.className = "lm-checkbox-item";
@@ -244,39 +137,36 @@ function openModal(title, items, selectedItems, onSave) {
             cb.type = "checkbox";
             const itemNameStr = item.name || "";
             cb.checked = currentSelection.has(itemNameStr);
-            cb.onchange = (e) => {
+            cb.onchange = function(e) {
                 if (e.target.checked) currentSelection.add(itemNameStr);
                 else currentSelection.delete(itemNameStr);
             };
             
-            const text = document.createElement("span");
-            text.textContent = item.name || "(Empty)";
+            const textSpan = document.createElement("span");
+            textSpan.textContent = name;
             
-            const count = document.createElement("span");
-            count.className = "lm-checkbox-count";
-            count.textContent = item.count;
+            const countSpan = document.createElement("span");
+            countSpan.className = "lm-checkbox-count";
+            countSpan.textContent = item.count;
             
             label.appendChild(cb);
-            label.appendChild(text);
-            label.appendChild(count);
+            label.appendChild(textSpan);
+            label.appendChild(countSpan);
             listContainer.appendChild(label);
         });
     };
     
-    search.oninput = (e) => renderList(e.target.value);
+    search.oninput = function(e) { renderList(e.target.value); };
     
-    const closeAndSave = () => {
-        document.body.removeChild(backdrop);
+    const closeAndSave = function() {
+        if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
         onSave(Array.from(currentSelection));
     };
     
     header.querySelector(".lm-modal-close").onclick = closeAndSave;
-    backdrop.onclick = (e) => {
-        if (e.target === backdrop) closeAndSave();
-    };
+    backdrop.onclick = function(e) { if (e.target === backdrop) closeAndSave(); };
     
     renderList("");
-    
     modal.appendChild(header);
     modal.appendChild(body);
     backdrop.appendChild(modal);
@@ -286,113 +176,99 @@ function openModal(title, items, selectedItems, onSave) {
 
 function getAvailableCounts(node, fieldName) {
     if (!cyclerMetadata || !cyclerMetadata.checkpoints) return {};
-    
-    const items = cyclerMetadata.checkpoints;
     const counts = {};
-    
-    items.forEach(c => {
+    cyclerMetadata.checkpoints.forEach(function(c) {
         let values = [];
         if (fieldName === "base_models") values = [c.base_model || "Unknown"];
-        else if (fieldName.startsWith("tags")) values = c.tags || [];
-        else if (fieldName.startsWith("folders")) values = c.folder ? [c.folder] : [];
+        else if (fieldName.indexOf("tags") !== -1) values = c.tags || [];
+        else if (fieldName.indexOf("folders") !== -1) values = c.folder ? [c.folder] : [];
         
-        values.forEach(v => {
-            if (v === undefined || v === null) return;
-            counts[v] = (counts[v] || 0) + 1;
+        values.forEach(function(v) {
+            if (v !== undefined && v !== null) counts[v] = (counts[v] || 0) + 1;
         });
     });
     return counts;
 }
 
-console.log("[CheckpointCycler] Loading checkpoint_cycler.js extension...");
-
 app.registerExtension({
     name: "comfyui-ckpt-utils.CheckpointCycler",
 
     getCustomWidgets() {
-        console.log("[CheckpointCycler] getCustomWidgets() executed by ComfyUI");
-        const createHiddenDataWidget = (node, inputName, inputData) => {
-            console.log("[CheckpointCycler] createHiddenDataWidget called for inputName:", inputName, "inputData:", inputData);
-            const w = node.addWidget("text", inputName, inputData[1]?.default || "", () => {}, { serialize: true });
-            w.type = "hidden";
-            w.computeSize = () => [0, 0];
+        console.log("[CheckpointCycler] getCustomWidgets() executed");
+        const createHiddenDataWidget = function(node, inputName, inputData) {
+            console.log("[CheckpointCycler] Adding hidden widget:", inputName);
+            const w = {
+                type: "text",
+                name: inputName,
+                value: inputData[1] && inputData[1].default ? inputData[1].default : "",
+                options: { serialize: true },
+                computeSize: function() { return [0, 0]; }
+            };
+            if (!node.widgets) node.widgets = [];
+            node.widgets.push(w);
             return { widget: w };
         };
 
         return {
-            CC_BASE_MODELS(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_TAGS_INCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_TAGS_EXCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_FOLDERS_INCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_FOLDERS_EXCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); }
+            CC_BASE_MODELS: createHiddenDataWidget,
+            CC_TAGS_INCLUDE: createHiddenDataWidget,
+            CC_TAGS_EXCLUDE: createHiddenDataWidget,
+            CC_FOLDERS_INCLUDE: createHiddenDataWidget,
+            CC_FOLDERS_EXCLUDE: createHiddenDataWidget
         };
     },
 
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
-            console.log("[CheckpointCycler] beforeRegisterNodeDef matching Checkpoint Cycler");
-
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
-                console.log("[CheckpointCycler] onNodeCreated running...");
+                console.log("[CheckpointCycler] onNodeCreated...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
-                const updateCountDisplay = () => {
-                    const mWidget = this.widgets.find(w => w.name === "total_matching_models");
-                    if (mWidget && cyclerMetadata && cyclerMetadata.checkpoints.length > 0) {
-                        mWidget.value = \`Available cycle matches: \${calculateMatches(this)}\`;
+                const self = this;
+                const updateCountDisplay = function() {
+                    const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                    if (mWidget && cyclerMetadata) {
+                        mWidget.value = "Available cycle matches: " + calculateMatches(self);
                     } 
                 };
 
-                const initialPoll = async () => {
+                const initialPoll = async function() {
                     await fetchMetadata();
-                    const mWidget = this.widgets.find(w => w.name === "total_matching_models");
-                    if (mWidget && cyclerMetadata && cyclerMetadata.checkpoints.length > 0) {
+                    const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                    if (mWidget && cyclerMetadata) {
                         updateCountDisplay();
                         app.graph.setDirtyCanvas(true, true);
                     } else if (mWidget) {
-                        mWidget.value = "Pending background scanner...";
+                        mWidget.value = "Pending database...";
                         setTimeout(initialPoll, 2000);
                     }
                 };
                 initialPoll();
 
-                this.addWidget("text", "total_matching_models", "Fetching database...", () => {});
-                const mw = this.widgets.find(w => w.name === "total_matching_models");
+                this.addWidget("text", "total_matching_models", "Fetching...", function() {});
+                const mw = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
                 if (mw && mw.inputEl) {
                     mw.inputEl.readOnly = true;
-                    mw.inputEl.style.color = "var(--error-text)";
-                    mw.inputEl.style.fontWeight = "bold";
+                    mw.inputEl.style.color = "#ff4444";
                 }
                 
-                const setupDOMWidget = () => {
-                    console.log("[CheckpointCycler] setupDOMWidget executing...");
+                const setupDOMWidget = function() {
+                    console.log("[CheckpointCycler] setupDOMWidget...");
                     try {
                         const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                        if (!this.widgets) {
-                            console.log("[CheckpointCycler] setupDOMWidget aborted: this.widgets is undefined");
-                            return;
-                        }
-                        console.log("[CheckpointCycler] Found widgets array, iterating multiCombos...");
-
                         const container = document.createElement("div");
                         container.className = "cc-dom-container";
-                        
-                        // Stop mouse events from reaching canvas so we can scroll
-                        container.addEventListener("wheel", (e) => e.stopPropagation());
-                        container.addEventListener("pointerdown", (e) => {
-                            if (e.pointerType !== "mouse" || e.button !== 1) e.stopPropagation();
-                        });
+                        container.addEventListener("wheel", function(e) { e.stopPropagation(); });
+                        container.addEventListener("pointerdown", function(e) { if (e.pointerType !== "mouse" || e.button !== 1) e.stopPropagation(); });
 
-                        const renderSections = () => {
+                        const renderSections = function() {
                             container.innerHTML = "";
-                            multiCombos.forEach(wName => {
-                                const internalW = this.widgets.find(x => x.name === wName);
+                            multiCombos.forEach(function(wName) {
+                                const internalW = self.widgets.find(function(x) { return x.name === wName; });
                                 if (!internalW) return;
                                 
-                                // Ensure standard Text Box is nuked if any rogue code recreated it
                                 internalW.type = "hidden";
-                                internalW.computeSize = () => [0, 0];
                                 if (internalW.inputEl) {
                                     internalW.inputEl.style.display = "none";
                                     internalW.inputEl.remove();
@@ -401,26 +277,22 @@ app.registerExtension({
                                 
                                 const section = document.createElement("div");
                                 section.className = "cc-section";
-                                
                                 const header = document.createElement("div");
                                 header.className = "cc-section-header";
-                                
                                 const title = document.createElement("span");
                                 title.className = "cc-section-title";
-                                const cleanName = wName.replace(/_/g, " ");
-                                title.textContent = cleanName;
+                                title.textContent = wName.replace(/_/g, " ");
                                 
                                 const editBtn = document.createElement("button");
                                 editBtn.className = "cc-edit-btn";
-                                editBtn.innerHTML = \`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit\`;
-                                
-                                editBtn.onclick = () => {
-                                    const counts = getAvailableCounts(this, wName);
-                                    const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
-                                    const items = allNames.map(n => ({name: n, count: counts[n]}));
-                                    const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
+                                editBtn.innerHTML = "Edit";
+                                editBtn.onclick = function() {
+                                    const counts = getAvailableCounts(self, wName);
+                                    const allNames = Object.keys(counts).sort(function(a,b) { return counts[b] - counts[a]; });
+                                    const items = allNames.map(function(n) { return {name: n, count: counts[n]}; });
+                                    const selected = (internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
                                     
-                                    openModal("Select " + cleanName.toUpperCase(), items, selected, (newSelection) => {
+                                    openModal("Select " + wName.toUpperCase(), items, selected, function(newSelection) {
                                         internalW.value = newSelection.join(", ");
                                         updateCountDisplay();
                                         renderSections();
@@ -432,87 +304,68 @@ app.registerExtension({
                                 header.appendChild(editBtn);
                                 section.appendChild(header);
                                 
-                                const chipsContainer = document.createElement("div");
-                                chipsContainer.className = "cc-chips-container";
-                                
-                                const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
+                                const chipsCont = document.createElement("div");
+                                chipsCont.className = "cc-chips-container";
+                                const selected = (internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
                                 if (selected.length === 0) {
                                     const empty = document.createElement("div");
                                     empty.className = "cc-empty";
-                                    empty.textContent = "No filters selected";
-                                    chipsContainer.appendChild(empty);
+                                    empty.textContent = "No filters";
+                                    chipsCont.appendChild(empty);
                                 } else {
-                                    const isExclude = wName.includes("exclude");
-                                    const isBase = wName === "base_models";
-                                    const chipClass = isBase ? "cc-chip-base" : (isExclude ? "cc-chip-exclude" : "cc-chip-include");
-                                    const counts = getAvailableCounts(this, wName);
-                                    
-                                    selected.forEach(sel => {
+                                    const isExclude = wName.indexOf("exclude") !== -1;
+                                    const chipCls = wName === "base_models" ? "cc-chip-base" : (isExclude ? "cc-chip-exclude" : "cc-chip-include");
+                                    const counts = getAvailableCounts(self, wName);
+                                    selected.forEach(function(sel) {
                                         const chip = document.createElement("div");
-                                        chip.className = \`cc-chip \${chipClass}\`;
-                                        chip.textContent = sel + (counts[sel] ? \` (\${counts[sel]})\` : "");
-                                        chipsContainer.appendChild(chip);
+                                        chip.className = "cc-chip " + chipCls;
+                                        chip.textContent = sel + (counts[sel] ? " (" + counts[sel] + ")" : "");
+                                        chipsCont.appendChild(chip);
                                     });
                                 }
-                                
-                                section.appendChild(chipsContainer);
+                                section.appendChild(chipsCont);
                                 container.appendChild(section);
                             });
                         };
 
                         renderSections();
-                        
-                        if (!this.addDOMWidget) {
-                            throw new Error("addDOMWidget is not supported by this ComfyUI version!");
-                        }
-                        
-                        const domWidget = this.addDOMWidget("cc_ui", "CC_UI", container, {
+                        const domW = self.addDOMWidget("cc_ui", "CC_UI", container, {
                             serialize: false,
-                            getValue() { return ""; },
-                            setValue(v) { renderSections(); }
+                            getValue: function() { return ""; },
+                            setValue: function(v) { renderSections(); }
                         });
-                        console.log("[CheckpointCycler] addDOMWidget successful!");
-                        
-                        domWidget.computeSize = () => [Math.max(340, this.size?.[0] || 340), 300];
-                        this.setSize([Math.max(this.size?.[0] || 340, 340), this.computeSize()[1]]);
+                        domW.computeSize = function() { return [Math.max(340, self.size[0]), 300]; };
+                        self.setSize([Math.max(self.size[0], 340), domW.computeSize()[1]]);
                     } catch (err) {
-                        console.error("[CheckpointCycler] CRASH in setupDOMWidget:", err);
-                        this.addWidget("text", "dom_error", err.toString(), () => {});
+                        console.error("[CheckpointCycler] setupDOMWidget error:", err);
                     }
                 };
 
-                // Remove legacy buttons if they exist
-                this.widgets = this.widgets.filter(w => w.type !== "button" || (!w.name.startsWith("+ Edit") && w.name !== "reset_cycle"));
+                this.widgets = this.widgets.filter(function(w) { return w.type !== "button" || (!w.name.startsWith("+ Edit") && w.name !== "reset_cycle"); });
 
-                requestAnimationFrame(() => {
-                    console.log("[CheckpointCycler] requestAnimationFrame triggered...");
-                    if (!this.widgets.find(w => w.name === "cc_ui")) {
+                requestAnimationFrame(function() {
+                    if (!self.widgets.find(function(w) { return w.name === "cc_ui"; })) {
                         setupDOMWidget();
-                        
-                        this.addWidget("button", "reset_cycle", "Restart Cycle (Set index to 0)", () => {
-                            const currentIndexWidget = this.widgets.find((w) => w.name === "current_index");
-                            if (currentIndexWidget) {
-                                currentIndexWidget.value = 0;
-                            }
+                        self.addWidget("button", "reset_cycle", "Restart Cycle", function() {
+                            const ciw = self.widgets.find(function(w) { return w.name === "current_index"; });
+                            if (ciw) ciw.value = 0;
                         });
-                        
                         app.graph.setDirtyCanvas(true, true);
                     }
                 });
-
                 return r;
             };
 
             const onConfigure = nodeType.prototype.onConfigure;
             nodeType.prototype.onConfigure = function() {
                 if (onConfigure) onConfigure.apply(this, arguments);
-                requestAnimationFrame(() => {
-                    const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                    if (this.widgets) {
-                        this.widgets.forEach(w => {
-                            if (multiCombos.includes(w.name)) {
+                const self = this;
+                requestAnimationFrame(function() {
+                    const multi = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                    if (self.widgets) {
+                        self.widgets.forEach(function(w) {
+                            if (multi.indexOf(w.name) !== -1) {
                                 w.type = "hidden";
-                                w.computeSize = () => [0, 0];
                                 if (w.inputEl) {
                                     w.inputEl.style.display = "none";
                                     w.inputEl.remove();
@@ -521,32 +374,10 @@ app.registerExtension({
                             }
                         });
                     }
-                    const uiWidget = this.widgets?.find(w => w.name === "cc_ui");
-                    if (uiWidget && uiWidget.options && uiWidget.options.setValue) {
-                        uiWidget.options.setValue("");
-                    }
+                    const uiw = self.widgets.find(function(w) { return w.name === "cc_ui"; });
+                    if (uiw && uiw.options && uiw.options.setValue) uiw.options.setValue("");
                     app.graph.setDirtyCanvas(true, true);
                 });
-            };
-
-            const onExecuted = nodeType.prototype.onExecuted;
-            nodeType.prototype.onExecuted = function (message) {
-                if (onExecuted) onExecuted.apply(this, arguments);
-
-                if (message.current_index) {
-                    const idxWidget = this.widgets.find((w) => w.name === "current_index");
-                    if (idxWidget) idxWidget.value = message.current_index[0];
-                }
-                
-                if (message.total_count) {
-                    const mWidget = this.widgets.find(w => w.name === "total_matching_models");
-                    if (mWidget) mWidget.value = \`Available cycle matches: \${message.total_count[0]}\`;
-                }
-
-                if (message.last_selected_ckpt) {
-                    const ckptWidget = this.widgets.find((w) => w.name === "last_selected_ckpt");
-                    if (ckptWidget) ckptWidget.value = message.last_selected_ckpt[0];
-                }
             };
         }
     }
