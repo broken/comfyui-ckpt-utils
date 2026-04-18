@@ -22,6 +22,7 @@ class TagParserCU:
     def parse(self, tags, label, default):
         tags = str(tags)
         label = str(label)
+        default = str(default)
         tag_list = [t.strip() for t in tags.split(',') if t.strip()]
         
         target_prefix = f"{label}:"
@@ -41,7 +42,7 @@ class TagParserCU:
                     break
                 
         if found_val_str is None:
-            found_val_str = str(default)
+            found_val_str = default
             
         # BOOLEAN
         bool_val = False
