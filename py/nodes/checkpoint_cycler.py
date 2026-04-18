@@ -111,11 +111,11 @@ class CheckpointCyclerCU:
         return {
             "required": {
                 "ckpt_name": (["Auto (Cycle)"] + names, {"default": "Auto (Cycle)"}),
-                "base_models": ("STRING", {"default": ""}),
-                "tags_include": ("STRING", {"default": ""}),
-                "tags_exclude": ("STRING", {"default": ""}),
-                "folders_include": ("STRING", {"default": ""}),
-                "folders_exclude": ("STRING", {"default": ""}),
+                "base_models": ("CC_BASE_MODELS", {"default": ""}),
+                "tags_include": ("CC_TAGS_INCLUDE", {"default": ""}),
+                "tags_exclude": ("CC_TAGS_EXCLUDE", {"default": ""}),
+                "folders_include": ("CC_FOLDERS_INCLUDE", {"default": ""}),
+                "folders_exclude": ("CC_FOLDERS_EXCLUDE", {"default": ""}),
                 "repeats": ("INT", {"default": 1, "min": 1, "max": 9999}),
                 "current_index": ("INT", {"default": 0, "min": 0, "max": 999999}),
             },

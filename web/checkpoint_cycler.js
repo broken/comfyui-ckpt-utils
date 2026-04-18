@@ -210,17 +210,28 @@ function getAvailableCounts(node, fieldName) {
 
 app.registerExtension({
     name: "comfyui-ckpt-utils.CheckpointCycler",
+    
+    getCustomWidgets() {
+        const createHiddenDataWidget = (node, inputName, inputData) => {
+            return {
+                widget: node.addWidget(inputData[0], inputName, inputData[1]?.default || "", () => {}, { 
+                    serialize: true, 
+                    computeSize: () => [0, 0] 
+                })
+            };
+        };
+
+        return {
+            CC_BASE_MODELS(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_TAGS_INCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_TAGS_EXCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_FOLDERS_INCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_FOLDERS_EXCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
+        };
+    },
+
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
-            // Early intercept: tell ComfyUI these are hidden so it won't draw text boxes
-            const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-            if (nodeData.input && nodeData.input.required) {
-                for (const key of multiCombos) {
-                    if (nodeData.input.required[key]) {
-                        nodeData.input.required[key][0] = "HIDDEN_STRING";
-                    }
-                }
-            }
 
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
@@ -261,17 +272,8 @@ app.registerExtension({
                     if (widgetsToHide.length === 0) return;
 
                     widgetsToHide.forEach(w => {
-                        // Aggressive hiding
-                        w.type = "hidden";
-                        w.hidden = true;
+                        // Ensure it stays completely hidden from layout calculations
                         w.computeSize = () => [0, 0];
-                        if (w.inputEl) {
-                            w.inputEl.style.display = "none";
-                            w.inputEl.style.opacity = "0";
-                            w.inputEl.style.pointerEvents = "none";
-                            w.inputEl.style.position = "absolute";
-                            w.inputEl.style.top = "-9999px";
-                        }
 
                         // Add the button only if missing
                         const title = w.name.replace("_", " ").toUpperCase();
@@ -413,12 +415,7 @@ app.registerExtension({
                     if (this.widgets) {
                         this.widgets.forEach(w => {
                             if (multiCombos.includes(w.name)) {
-                                w.type = "hidden";
-                                w.hidden = true;
                                 w.computeSize = () => [0, 0];
-                                if (w.inputEl) {
-                                    w.inputEl.style.display = "none";
-                                }
                             }
                         });
                         // buttons are already added by onNodeCreated if configured correctly, 
