@@ -32,11 +32,11 @@ function calculateMatches(node, overrideKey, overrideValue) {
         return w ? w.value : "";
     };
 
-    const b_models = (getVal("base_models") || "").split(",").map(x => x.trim()).filter(x => x && x !== "Any" && x !== "[Clear]");
-    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
-    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
-    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
-    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x && x !== "any" && x !== "[clear]");
+    const b_models = (getVal("base_models") || "").split(",").map(x => x.trim()).filter(x => x);
+    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
+    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(x => x.trim()).filter(x => x);
 
     let count = 0;
     for (let c of cyclerMetadata.checkpoints) {

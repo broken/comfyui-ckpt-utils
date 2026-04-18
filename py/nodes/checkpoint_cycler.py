@@ -50,8 +50,8 @@ async def get_metadata():
         cache = await scanner.get_cached_data()
         model_roots = scanner.get_model_roots()
         
-        base_models = set(["Any"])
-        tags = set(["[Clear]"]) # Added explicit clear option for the JS appending logic
+        base_models = set()
+        tags = set()
         
         checkpoints = []
         for item in cache.raw_data:
@@ -95,7 +95,7 @@ async def get_metadata():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"base_models": ["[Clear]", "Any"], "tags": ["[Clear]"], "checkpoints": []}
+        return {"base_models": [], "tags": [], "checkpoints": []}
 
 
 class CheckpointCyclerCU:
@@ -144,11 +144,11 @@ class CheckpointCyclerCU:
             cache = await scanner.get_cached_data()
             model_roots = scanner.get_model_roots()
             
-            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip() and t.strip().lower() not in ("any", "[clear]")]
-            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip() and t.strip().lower() not in ("any", "[clear]")]
-            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip() and f.strip().lower() not in ("any", "[clear]")]
-            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip() and f.strip().lower() not in ("any", "[clear]")]
-            b_models = [b.strip() for b in base_models.split(',') if b.strip() and b.strip().lower() not in ("any", "[clear]")]
+            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip()]
+            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip()]
+            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip()]
+            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip()]
+            b_models = [b.strip() for b in base_models.split(',') if b.strip()]
             
             filtered = []
             for item in cache.raw_data:
