@@ -258,6 +258,12 @@ app.registerExtension({
                         else visible.push(w);
                     }
                     self.widgets = visible.concat(hidden);
+                    
+                    // Force LiteGraph to recalculate the node size based on visible widgets only
+                    if (self.computeSize) {
+                        var sz = self.computeSize();
+                        self.setSize([Math.max(self.size[0], sz[0]), sz[1]]);
+                    }
                 };
 
                 cleanupInputs();
@@ -422,6 +428,10 @@ app.registerExtension({
                             }
                         });
                         self.widgets = visible.concat(hidden);
+                    }
+                    if (self.computeSize) {
+                        var sz = self.computeSize();
+                        self.setSize([Math.max(self.size[0], sz[0]), sz[1]]);
                     }
                     app.graph.setDirtyCanvas(true, true);
                 };
