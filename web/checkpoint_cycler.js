@@ -237,34 +237,45 @@ app.registerExtension({
                     mw.inputEl.style.fontWeight = "bold";
                 }
                 
-                // Process the string fields to act differently
-                const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                
-                this.widgets.forEach(w => {
-                    if (multiCombos.includes(w.name)) {
-                        w.type = "hidden"; // We don't want the default string input box drawn
-                        w.computeSize = () => [0, 0];
-                        w.hidden = true; // Tell LiteGraph to hide it from interactions
-                        if (w.inputEl) {
-                            w.inputEl.style.display = "none";
-                        }
-                        
-                        let title = w.name.replace("_", " ").toUpperCase();
-                        this.addWidget("button", "+ Edit " + title, "Edit", () => {
-                            const counts = getAvailableCounts(this, w.name);
-                            const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+                const setupMultiCombos = () => {
+                    if (!this.widgets) return;
+                    const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                    
+                    let addedButtons = false;
+                    this.widgets.forEach(w => {
+                        if (multiCombos.includes(w.name) && w.type !== "hidden") {
+                            w.type = "hidden"; // We don't want the default string input box drawn
+                            w.computeSize = () => [0, 0];
+                            w.hidden = true; // Tell LiteGraph to hide it from interactions
+                            if (w.inputEl) {
+                                w.inputEl.style.display = "none";
+                            }
                             
-                            const items = allNames.map(n => ({name: n, count: counts[n]}));
-                            const selected = (w.value || "").split(",").map(x => x.trim()).filter(x => x);
-                            
-                            openModal("Select " + title, items, selected, (newSelection) => {
-                                w.value = newSelection.join(", ");
-                                updateCountDisplay();
-                                app.graph.setDirtyCanvas(true, true);
+                            let title = w.name.replace("_", " ").toUpperCase();
+                            this.addWidget("button", "+ Edit " + title, "Edit", () => {
+                                const counts = getAvailableCounts(this, w.name);
+                                const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+                                
+                                const items = allNames.map(n => ({name: n, count: counts[n]}));
+                                const selected = (w.value || "").split(",").map(x => x.trim()).filter(x => x);
+                                
+                                openModal("Select " + title, items, selected, (newSelection) => {
+                                    w.value = newSelection.join(", ");
+                                    updateCountDisplay();
+                                    app.graph.setDirtyCanvas(true, true);
+                                });
                             });
-                        });
+                            addedButtons = true;
+                        }
+                    });
+                    
+                    if (addedButtons) {
+                        this.setSize(this.computeSize());
+                        app.graph.setDirtyCanvas(true, true);
                     }
-                });
+                };
+
+                setTimeout(setupMultiCombos, 10);
 
                 // Custom drawing for chips
                 const onDrawForeground = this.onDrawForeground;
@@ -345,6 +356,46 @@ app.registerExtension({
                 });
 
                 return r;
+            };
+
+            const onConfigure = nodeType.prototype.onConfigure;
+            nodeType.prototype.onConfigure = function() {
+                if (onConfigure) onConfigure.apply(this, arguments);
+                
+                const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                let addedButtons = false;
+                if (this.widgets) {
+                    this.widgets.forEach(w => {
+                        if (multiCombos.includes(w.name) && w.type !== "hidden") {
+                            w.type = "hidden";
+                            w.computeSize = () => [0, 0];
+                            w.hidden = true;
+                            if (w.inputEl) {
+                                w.inputEl.style.display = "none";
+                            }
+                            
+                            let title = w.name.replace("_", " ").toUpperCase();
+                            this.addWidget("button", "+ Edit " + title, "Edit", () => {
+                                const counts = getAvailableCounts(this, w.name);
+                                const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+                                
+                                const items = allNames.map(n => ({name: n, count: counts[n]}));
+                                const selected = (w.value || "").split(",").map(x => x.trim()).filter(x => x);
+                                
+                                openModal("Select " + title, items, selected, (newSelection) => {
+                                    w.value = newSelection.join(", ");
+                                    // Hack to force UI update if needed
+                                    app.graph.setDirtyCanvas(true, true);
+                                });
+                            });
+                            addedButtons = true;
+                        }
+                    });
+                    if (addedButtons) {
+                        this.setSize(this.computeSize());
+                        app.graph.setDirtyCanvas(true, true);
+                    }
+                }
             };
 
             const onExecuted = nodeType.prototype.onExecuted;
