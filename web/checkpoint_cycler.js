@@ -314,7 +314,11 @@ app.registerExtension({
                 const updateCountDisplay = function() {
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
                     if (mWidget && cyclerMetadata) {
-                        mWidget.value = calculateMatches(self);
+                        const count = calculateMatches(self);
+                        mWidget.value = String(count);
+                        if (mWidget.inputEl) {
+                            mWidget.inputEl.value = mWidget.value;
+                        }
                     } 
                 };
 
