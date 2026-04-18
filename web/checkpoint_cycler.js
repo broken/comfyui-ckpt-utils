@@ -307,6 +307,31 @@ function getAvailableCounts(node, fieldName) {
 app.registerExtension({
     name: "comfyui-ckpt-utils.CheckpointCycler",
 
+    getCustomWidgets() {
+        const createHiddenDataWidget = (node, inputName, inputData) => {
+            // Act like a standard ComfyUI text widget but natively suppress the DOM creation
+            const w = {
+                type: inputData[0], // CC_BASE_MODELS
+                name: inputName,
+                value: inputData[1]?.default || "",
+                options: { serialize: true },
+                computeSize: () => [0, 0]
+            };
+            // Manually add it to the litegraph node
+            if (!node.widgets) node.widgets = [];
+            node.widgets.push(w);
+            return { widget: w };
+        };
+
+        return {
+            CC_BASE_MODELS(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_TAGS_INCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_TAGS_EXCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_FOLDERS_INCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); },
+            CC_FOLDERS_EXCLUDE(node, inputName, inputData) { return createHiddenDataWidget(node, inputName, inputData); }
+        };
+    },
+
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
 
@@ -343,103 +368,113 @@ app.registerExtension({
                 }
                 
                 const setupDOMWidget = () => {
-                    const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                    if (!this.widgets) return;
+                    try {
+                        const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                        if (!this.widgets) return;
 
-                    const container = document.createElement("div");
-                    container.className = "cc-dom-container";
-                    
-                    // Stop mouse events from reaching canvas so we can scroll
-                    container.addEventListener("wheel", (e) => e.stopPropagation());
-                    container.addEventListener("pointerdown", (e) => {
-                        if (e.pointerType !== "mouse" || e.button !== 1) e.stopPropagation();
-                    });
-
-                    const renderSections = () => {
-                        container.innerHTML = "";
-                        multiCombos.forEach(wName => {
-                            const internalW = this.widgets.find(x => x.name === wName);
-                            if (!internalW) return;
-                            
-                            // Nuke standard ComfyUI String widget
-                            internalW.type = "hidden";
-                            internalW.computeSize = () => [0, 0];
-                            if (internalW.inputEl) {
-                                internalW.inputEl.remove();
-                                internalW.inputEl = null;
-                            }
-                            
-                            const section = document.createElement("div");
-                            section.className = "cc-section";
-                            
-                            const header = document.createElement("div");
-                            header.className = "cc-section-header";
-                            
-                            const title = document.createElement("span");
-                            title.className = "cc-section-title";
-                            const cleanName = wName.replace(/_/g, " ");
-                            title.textContent = cleanName;
-                            
-                            const editBtn = document.createElement("button");
-                            editBtn.className = "cc-edit-btn";
-                            editBtn.innerHTML = \`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit\`;
-                            
-                            editBtn.onclick = () => {
-                                const counts = getAvailableCounts(this, wName);
-                                const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
-                                const items = allNames.map(n => ({name: n, count: counts[n]}));
-                                const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
-                                
-                                openModal("Select " + cleanName.toUpperCase(), items, selected, (newSelection) => {
-                                    internalW.value = newSelection.join(", ");
-                                    updateCountDisplay();
-                                    renderSections();
-                                    app.graph.setDirtyCanvas(true, true);
-                                });
-                            };
-                            
-                            header.appendChild(title);
-                            header.appendChild(editBtn);
-                            section.appendChild(header);
-                            
-                            const chipsContainer = document.createElement("div");
-                            chipsContainer.className = "cc-chips-container";
-                            
-                            const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
-                            if (selected.length === 0) {
-                                const empty = document.createElement("div");
-                                empty.className = "cc-empty";
-                                empty.textContent = "No filters selected";
-                                chipsContainer.appendChild(empty);
-                            } else {
-                                const isExclude = wName.includes("exclude");
-                                const isBase = wName === "base_models";
-                                const chipClass = isBase ? "cc-chip-base" : (isExclude ? "cc-chip-exclude" : "cc-chip-include");
-                                const counts = getAvailableCounts(this, wName);
-                                
-                                selected.forEach(sel => {
-                                    const chip = document.createElement("div");
-                                    chip.className = \`cc-chip \${chipClass}\`;
-                                    chip.textContent = sel + (counts[sel] ? \` (\${counts[sel]})\` : "");
-                                    chipsContainer.appendChild(chip);
-                                });
-                            }
-                            
-                            section.appendChild(chipsContainer);
-                            container.appendChild(section);
+                        const container = document.createElement("div");
+                        container.className = "cc-dom-container";
+                        
+                        // Stop mouse events from reaching canvas so we can scroll
+                        container.addEventListener("wheel", (e) => e.stopPropagation());
+                        container.addEventListener("pointerdown", (e) => {
+                            if (e.pointerType !== "mouse" || e.button !== 1) e.stopPropagation();
                         });
-                    };
 
-                    renderSections();
-                    
-                    const domWidget = this.addDOMWidget("cc_ui", "CC_UI", container, {
-                        serialize: false,
-                        getValue() { return ""; },
-                        setValue(v) { renderSections(); }
-                    });
-                    
-                    domWidget.computeSize = () => [Math.max(340, this.size[0]), 300];
-                    this.setSize([Math.max(this.size?.[0] || 340, 340), this.computeSize()[1]]);
+                        const renderSections = () => {
+                            container.innerHTML = "";
+                            multiCombos.forEach(wName => {
+                                const internalW = this.widgets.find(x => x.name === wName);
+                                if (!internalW) return;
+                                
+                                // Ensure standard Text Box is nuked if any rogue code recreated it
+                                internalW.type = "hidden";
+                                internalW.computeSize = () => [0, 0];
+                                if (internalW.inputEl) {
+                                    internalW.inputEl.style.display = "none";
+                                    internalW.inputEl.remove();
+                                    internalW.inputEl = null;
+                                }
+                                
+                                const section = document.createElement("div");
+                                section.className = "cc-section";
+                                
+                                const header = document.createElement("div");
+                                header.className = "cc-section-header";
+                                
+                                const title = document.createElement("span");
+                                title.className = "cc-section-title";
+                                const cleanName = wName.replace(/_/g, " ");
+                                title.textContent = cleanName;
+                                
+                                const editBtn = document.createElement("button");
+                                editBtn.className = "cc-edit-btn";
+                                editBtn.innerHTML = \`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit\`;
+                                
+                                editBtn.onclick = () => {
+                                    const counts = getAvailableCounts(this, wName);
+                                    const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+                                    const items = allNames.map(n => ({name: n, count: counts[n]}));
+                                    const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
+                                    
+                                    openModal("Select " + cleanName.toUpperCase(), items, selected, (newSelection) => {
+                                        internalW.value = newSelection.join(", ");
+                                        updateCountDisplay();
+                                        renderSections();
+                                        app.graph.setDirtyCanvas(true, true);
+                                    });
+                                };
+                                
+                                header.appendChild(title);
+                                header.appendChild(editBtn);
+                                section.appendChild(header);
+                                
+                                const chipsContainer = document.createElement("div");
+                                chipsContainer.className = "cc-chips-container";
+                                
+                                const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
+                                if (selected.length === 0) {
+                                    const empty = document.createElement("div");
+                                    empty.className = "cc-empty";
+                                    empty.textContent = "No filters selected";
+                                    chipsContainer.appendChild(empty);
+                                } else {
+                                    const isExclude = wName.includes("exclude");
+                                    const isBase = wName === "base_models";
+                                    const chipClass = isBase ? "cc-chip-base" : (isExclude ? "cc-chip-exclude" : "cc-chip-include");
+                                    const counts = getAvailableCounts(this, wName);
+                                    
+                                    selected.forEach(sel => {
+                                        const chip = document.createElement("div");
+                                        chip.className = \`cc-chip \${chipClass}\`;
+                                        chip.textContent = sel + (counts[sel] ? \` (\${counts[sel]})\` : "");
+                                        chipsContainer.appendChild(chip);
+                                    });
+                                }
+                                
+                                section.appendChild(chipsContainer);
+                                container.appendChild(section);
+                            });
+                        };
+
+                        renderSections();
+                        
+                        if (!this.addDOMWidget) {
+                            throw new Error("addDOMWidget is not supported by this ComfyUI version!");
+                        }
+                        
+                        const domWidget = this.addDOMWidget("cc_ui", "CC_UI", container, {
+                            serialize: false,
+                            getValue() { return ""; },
+                            setValue(v) { renderSections(); }
+                        });
+                        
+                        domWidget.computeSize = () => [Math.max(340, this.size?.[0] || 340), 300];
+                        this.setSize([Math.max(this.size?.[0] || 340, 340), this.computeSize()[1]]);
+                    } catch (err) {
+                        console.error("[Checkpoint Cycler]", err);
+                        this.addWidget("text", "dom_error", err.toString(), () => {});
+                    }
                 };
 
                 // Remove legacy buttons if they exist
@@ -474,6 +509,7 @@ app.registerExtension({
                                 w.type = "hidden";
                                 w.computeSize = () => [0, 0];
                                 if (w.inputEl) {
+                                    w.inputEl.style.display = "none";
                                     w.inputEl.remove();
                                     w.inputEl = null;
                                 }
