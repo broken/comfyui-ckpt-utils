@@ -55,7 +55,7 @@ function calculateMatches(node, overrideKey, overrideValue) {
     let count = 0;
     for (let i = 0; i < cyclerMetadata.checkpoints.length; i++) {
         const c = cyclerMetadata.checkpoints[i];
-        if (b_models.length > 0 && !b_models.includes(c.base_model)) continue;
+        if (b_models.length > 0 && b_models.indexOf(c.base_model) === -1) continue;
         
         const hasIncT = inc_t.length === 0 || inc_t.every(function(t) { return c.tags && c.tags.indexOf(t) !== -1; });
         if (!hasIncT) continue;
@@ -71,6 +71,7 @@ function calculateMatches(node, overrideKey, overrideValue) {
         
         count++;
     }
+    console.log("[CheckpointCycler] CalculateMatches count:", count, "Filters:", {b_models, inc_t, exc_t, inc_f, exc_f});
     return count;
 }
 
@@ -221,11 +222,22 @@ function syncNodeLayout(node) {
             w.computeSize = function() { return [0, 0]; };
             
             // Forcefully remove the HTML element if ComfyUI created one
-            if (w.inputEl) {
-                w.inputEl.style.display = "none";
-                if (w.inputEl.parentNode) w.inputEl.parentNode.removeChild(w.inputEl);
-                w.inputEl = null;
-            }
+            const cleanupEl = function(el) {
+                if (el) {
+                    el.style.display = "none";
+                    el.style.height = "0px";
+                    el.style.overflow = "hidden";
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                }
+            };
+            
+            cleanupEl(w.inputEl);
+            cleanupEl(w.element);
+            cleanupEl(w.contentElement);
+            w.inputEl = null;
+            w.element = null;
+            w.contentElement = null;
+
             hidden.push(w);
         } else {
             visible.push(w);
@@ -236,11 +248,25 @@ function syncNodeLayout(node) {
         }
     });
 
-    // 3. Reorder to put hidden at the end
+    // 3. NUCLEAR WIPE: Find any orphaned inputs in the DOM related to this node
+    if (node.id) {
+        const orphans = document.querySelectorAll('[id*="' + node.id + '"]');
+        orphans.forEach(el => {
+            custom.forEach(f => {
+                if (el.id && el.id.indexOf(f) !== -1) {
+                    el.style.display = "none";
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                }
+            });
+        });
+    }
+
+    // 4. Reorder to put hidden at the end
     node.widgets = visible.concat(hidden);
     
-    // 4. Force Resize
+    // 5. Force Resize
     node.size[1] = totalH + 2;
+    if (app.graph) app.graph.setDirtyCanvas(true, true);
 }
 
 injectStyles();
@@ -300,16 +326,20 @@ app.registerExtension({
                 };
 
                 const initialPoll = async function() {
+                    console.log("[CheckpointCycler] polling initial metadata...");
                     const data = await fetchMetadata();
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
                     if (mWidget && data && data.checkpoints && data.checkpoints.length > 0) {
+                        console.log("[CheckpointCycler] database ready, updating display");
                         updateCountDisplay();
                         app.graph.setDirtyCanvas(true, true);
                     } else if (mWidget) {
-                        mWidget.value = (data && data.checkpoints) ? "Waiting for background scanner..." : "Database connection failed";
+                        mWidget.value = (data && data.checkpoints) ? "Scanning checkpoints..." : "Database connection failed";
+                        console.log("[CheckpointCycler] Database not ready yet: ", mWidget.value);
                         setTimeout(initialPoll, 2000);
                     }
                 };
+
 
                 initialPoll();
 
