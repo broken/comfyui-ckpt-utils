@@ -304,11 +304,15 @@ function getAvailableCounts(node, fieldName) {
     return counts;
 }
 
+console.log("[CheckpointCycler] Loading checkpoint_cycler.js extension...");
+
 app.registerExtension({
     name: "comfyui-ckpt-utils.CheckpointCycler",
 
     getCustomWidgets() {
+        console.log("[CheckpointCycler] getCustomWidgets() executed by ComfyUI");
         const createHiddenDataWidget = (node, inputName, inputData) => {
+            console.log("[CheckpointCycler] createHiddenDataWidget called for inputName:", inputName, "inputData:", inputData);
             const w = node.addWidget("text", inputName, inputData[1]?.default || "", () => {}, { serialize: true });
             w.type = "hidden";
             w.computeSize = () => [0, 0];
@@ -326,9 +330,11 @@ app.registerExtension({
 
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
+            console.log("[CheckpointCycler] beforeRegisterNodeDef matching Checkpoint Cycler");
 
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
+                console.log("[CheckpointCycler] onNodeCreated running...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
                 const updateCountDisplay = () => {
@@ -360,9 +366,14 @@ app.registerExtension({
                 }
                 
                 const setupDOMWidget = () => {
+                    console.log("[CheckpointCycler] setupDOMWidget executing...");
                     try {
                         const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                        if (!this.widgets) return;
+                        if (!this.widgets) {
+                            console.log("[CheckpointCycler] setupDOMWidget aborted: this.widgets is undefined");
+                            return;
+                        }
+                        console.log("[CheckpointCycler] Found widgets array, iterating multiCombos...");
 
                         const container = document.createElement("div");
                         container.className = "cc-dom-container";
@@ -460,11 +471,12 @@ app.registerExtension({
                             getValue() { return ""; },
                             setValue(v) { renderSections(); }
                         });
+                        console.log("[CheckpointCycler] addDOMWidget successful!");
                         
                         domWidget.computeSize = () => [Math.max(340, this.size?.[0] || 340), 300];
                         this.setSize([Math.max(this.size?.[0] || 340, 340), this.computeSize()[1]]);
                     } catch (err) {
-                        console.error("[Checkpoint Cycler]", err);
+                        console.error("[CheckpointCycler] CRASH in setupDOMWidget:", err);
                         this.addWidget("text", "dom_error", err.toString(), () => {});
                     }
                 };
@@ -473,6 +485,7 @@ app.registerExtension({
                 this.widgets = this.widgets.filter(w => w.type !== "button" || (!w.name.startsWith("+ Edit") && w.name !== "reset_cycle"));
 
                 requestAnimationFrame(() => {
+                    console.log("[CheckpointCycler] requestAnimationFrame triggered...");
                     if (!this.widgets.find(w => w.name === "cc_ui")) {
                         setupDOMWidget();
                         
