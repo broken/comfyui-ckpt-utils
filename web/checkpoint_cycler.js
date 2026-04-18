@@ -198,6 +198,51 @@ function getAvailableCounts(node, fieldName) {
     return counts;
 }
 
+function syncNodeLayout(node) {
+    if (!node || !node.widgets) return;
+    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+    var totalH = 34; // Tighter title bar
+    
+    // 1. Suppress Inputs (the dots)
+    if (node.inputs) {
+        for (var i = node.inputs.length - 1; i >= 0; i--) {
+            if (custom.indexOf(node.inputs[i].name) !== -1) node.removeInput(i);
+        }
+    }
+
+    var visible = [];
+    var hidden = [];
+
+    // 2. Suppress Widgets and their DOM elements
+    node.widgets.forEach(function(w) {
+        if (custom.indexOf(w.name) !== -1) {
+            w.type = "hidden";
+            w.draw = function() { return; };
+            w.computeSize = function() { return [0, 0]; };
+            
+            // Forcefully remove the HTML element if ComfyUI created one
+            if (w.inputEl) {
+                w.inputEl.style.display = "none";
+                if (w.inputEl.parentNode) w.inputEl.parentNode.removeChild(w.inputEl);
+                w.inputEl = null;
+            }
+            hidden.push(w);
+        } else {
+            visible.push(w);
+            var h = 24;
+            if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
+            else if (w.computeSize) h = w.computeSize()[1];
+            totalH += h + 2;
+        }
+    });
+
+    // 3. Reorder to put hidden at the end
+    node.widgets = visible.concat(hidden);
+    
+    // 4. Force Resize
+    node.size[1] = totalH + 2;
+}
+
 injectStyles();
 
 app.registerExtension({
@@ -234,56 +279,16 @@ app.registerExtension({
         if (nodeData.name === "Checkpoint Cycler") {
             console.log("[CheckpointCycler] beforeRegisterNodeDef matching Checkpoint Cycler");
 
-            const onNodeCreated = nodeType.prototype.onNodeCreated;
-            nodeType.prototype.onNodeCreated = function () {
+            const onNodeCreated = nodeType.prototype.onNodeCreated;            nodeType.prototype.onNodeCreated = function () {
+                console.log("[CheckpointCycler] onNodeCreated running...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
-                // Aggressively remove input slots that match our custom widgets
                 var self = this;
-                var customInputs = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                
-                var cleanupInputs = function() {
-                    if (!self.inputs) return;
-                    for (var i = self.inputs.length - 1; i >= 0; i--) {
-                        var input = self.inputs[i];
-                        if (input && customInputs.indexOf(input.name) !== -1) {
-                            self.removeInput(i);
-                        }
-                    }
-                };
-                
-                var collapseWidgets = function() {
-                    if (!self.widgets) return;
-                    var totalH = 34; // Tighter title bar + padding
-                    
-                    var visible = [];
-                    var hidden = [];
-                    
-                    self.widgets.forEach(function(w) {
-                        if (customInputs.indexOf(w.name) !== -1) {
-                            w.type = "hidden";
-                            w.draw = function() { return; };
-                            w.computeSize = function() { return [0, 0]; };
-                            hidden.push(w);
-                        } else {
-                            visible.push(w);
-                            var h = 24;
-                            if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
-                            else if (w.computeSize) h = w.computeSize()[1];
-                            totalH += h + 2; // Tighter 2px margin
-                        }
-                    });
-                    
-                    self.widgets = visible.concat(hidden);
-                    self.size[1] = totalH + 2; // Tighter 2px footer pad
-                };
-
-
-
-                cleanupInputs();
-                collapseWidgets();
-                setTimeout(function() { cleanupInputs(); collapseWidgets(); }, 10);
-                setTimeout(function() { cleanupInputs(); collapseWidgets(); }, 100);
+                var sync = function() { syncNodeLayout(self); };
+                sync();
+                setTimeout(sync, 10);
+                setTimeout(sync, 100);
+;
 
 
 
@@ -393,10 +398,10 @@ app.registerExtension({
                             requestAnimationFrame(function() {
                                 var contentH = Math.min(400, Math.max(60, container.scrollHeight + 10));
                                 domW.computeSize = function() { return [self.size[0], contentH]; };
-                                if (self.hasOwnProperty("onNodeCreated")) collapseWidgets();
-                                else purge();
+                                syncNodeLayout(self);
                             });
                         };
+
 
                         renderSections();
                         const domW = self.addDOMWidget("cc_ui", "CC_UI", container, {
@@ -428,54 +433,19 @@ app.registerExtension({
                 });
                 return r;
             };
-
             const onConfigure = nodeType.prototype.onConfigure;
             nodeType.prototype.onConfigure = function() {
                 if (onConfigure) onConfigure.apply(this, arguments);
                 var self = this;
-                var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                
-                var purge = function() {
-                    if (self.inputs) {
-                        for (var i = self.inputs.length - 1; i >= 0; i--) {
-                            if (custom.indexOf(self.inputs[i].name) !== -1) self.removeInput(i);
-                        }
-                    }
-
-                    var totalH = 34; // Tighter title bar
-                    if (self.widgets) {
-                        var visible = [];
-                        var hidden = [];
-                        self.widgets.forEach(function(w) {
-                            if (custom.indexOf(w.name) !== -1) {
-                                w.type = "hidden";
-                                w.draw = function() { return; };
-                                w.computeSize = function() { return [0, 0]; };
-                                hidden.push(w);
-                            } else {
-                                visible.push(w);
-                                var h = 24;
-                                if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
-                                else if (w.computeSize) h = w.computeSize()[1];
-                                totalH += h + 2; // Tighter 2px margin
-                            }
-                        });
-                        self.widgets = visible.concat(hidden);
-                    }
-                    self.size[1] = totalH + 2; // Tighter 2px footer
-                    app.graph.setDirtyCanvas(true, true);
-                };
-
-
-                purge();
-                setTimeout(purge, 100);
+                var sync = function() { syncNodeLayout(self); };
+                sync();
+                setTimeout(sync, 100);
                 
                 requestAnimationFrame(function() {
-                    const multi = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
                     const uiw = self.widgets.find(function(w) { return w.name === "cc_ui"; });
                     if (uiw && uiw.options && uiw.options.setValue) uiw.options.setValue("");
                 });
-            };
+            };;
 
             const onExecuted = nodeType.prototype.onExecuted;
             nodeType.prototype.onExecuted = function (message) {
