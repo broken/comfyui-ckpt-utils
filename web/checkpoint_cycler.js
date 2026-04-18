@@ -97,6 +97,102 @@ const styles = `
 .lm-checkbox-item:hover { background: #333; color: #fff; }
 .lm-checkbox-item input { margin: 0; width: 18px; height: 18px; cursor: pointer; accent-color: #4a9eff; }
 .lm-checkbox-count { opacity: 0.5; font-size: 12px; margin-left: auto; background: #2a2a2a; padding: 2px 8px; border-radius: 12px; }
+
+/* DOM Widget Styles */
+.cc-dom-container {
+    padding: 12px;
+    background: rgba(40, 44, 52, 0.6);
+    border-radius: 4px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    box-sizing: border-box;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #fff;
+    gap: 16px;
+}
+.cc-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.cc-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.cc-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+}
+.cc-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s, background 0.15s;
+    border-radius: 3px;
+}
+.cc-edit-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.05);
+}
+.cc-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 24px;
+}
+.cc-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+.cc-chip-base {
+    background: rgba(66, 153, 225, 0.15);
+    border-color: rgba(66, 153, 225, 0.4);
+    color: #4299e1;
+}
+.cc-chip-include {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #10b981;
+}
+.cc-chip-exclude {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+}
+.cc-chip-count {
+    opacity: 0.6;
+    font-size: 10px;
+    margin-left: 4px;
+}
+.cc-empty {
+    font-size: 10px;
+    opacity: 0.3;
+    font-style: italic;
+    width: 100%;
+    text-align: center;
+    background: rgba(0,0,0,0.2);
+    padding: 6px;
+    border-radius: 4px;
+}
 `;
 
 function injectStyles() {
@@ -265,146 +361,114 @@ app.registerExtension({
                     mw.inputEl.style.fontWeight = "bold";
                 }
                 
-                const setupMultiCombos = () => {
+                const setupDOMWidget = () => {
                     const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                    
                     if (!this.widgets) return;
 
-                    multiCombos.forEach(wName => {
-                        const w = this.widgets.find(x => x.name === wName);
-                        if (w) {
-                            w.computeSize = () => [0, 0];
-                        }
+                    const container = document.createElement("div");
+                    container.className = "cc-dom-container";
+                    
+                    // Stop mouse events from reaching canvas so we can scroll
+                    container.addEventListener("wheel", (e) => e.stopPropagation());
+                    container.addEventListener("pointerdown", (e) => {
+                        if (e.pointerType !== "mouse" || e.button !== 1) e.stopPropagation();
+                    });
 
-                        // Add the button only if missing
-                        const title = wName.replace("_", " ").toUpperCase();
-                        const btnName = "+ Edit " + title;
-                        if (!this.widgets.find(bw => bw.name === btnName)) {
-                            this.addWidget("button", btnName, "Edit", () => {
+                    const renderSections = () => {
+                        container.innerHTML = "";
+                        multiCombos.forEach(wName => {
+                            const internalW = this.widgets.find(x => x.name === wName);
+                            if (!internalW) return;
+                            internalW.computeSize = () => [0, 0]; // Keep invisible
+                            
+                            const section = document.createElement("div");
+                            section.className = "cc-section";
+                            
+                            const header = document.createElement("div");
+                            header.className = "cc-section-header";
+                            
+                            const title = document.createElement("span");
+                            title.className = "cc-section-title";
+                            const cleanName = wName.replace(/_/g, " ");
+                            title.textContent = cleanName;
+                            
+                            const editBtn = document.createElement("button");
+                            editBtn.className = "cc-edit-btn";
+                            editBtn.innerHTML = \`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit\`;
+                            
+                            editBtn.onclick = () => {
                                 const counts = getAvailableCounts(this, wName);
                                 const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
                                 const items = allNames.map(n => ({name: n, count: counts[n]}));
-                                const internalW = this.widgets.find(x => x.name === wName);
-                                const selected = (internalW && internalW.value ? internalW.value : "").split(",").map(x => x.trim()).filter(x => x);
+                                const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
                                 
-                                openModal("Select " + title, items, selected, (newSelection) => {
-                                    if (internalW) {
-                                        internalW.value = newSelection.join(", ");
-                                    }
+                                openModal("Select " + cleanName.toUpperCase(), items, selected, (newSelection) => {
+                                    internalW.value = newSelection.join(", ");
                                     updateCountDisplay();
+                                    renderSections();
                                     app.graph.setDirtyCanvas(true, true);
                                 });
-                            });
-                        }
-                    });
-
-                    this.setSize(this.computeSize());
-                };
-
-                // Use requestAnimationFrame for safer initialization
-                requestAnimationFrame(() => {
-                    setupMultiCombos();
-                    app.graph.setDirtyCanvas(true, true);
-                });
-
-                const onDrawForeground = this.onDrawForeground;
-                this.onDrawForeground = function(ctx) {
-                    if (onDrawForeground) onDrawForeground.apply(this, arguments);
-                    if (!cyclerMetadata) return;
-                    
-                    // Interaction handling for chips (simple distance check)
-                    const mouse = app.canvas.graph_mouse;
-                    let hoveredChip = null;
-
-                    for (let w of this.widgets) {
-                        if (w.type === "button" && w.name.startsWith("+ Edit")) {
-                            const relatedName = w.name.replace("+ Edit ", "").toLowerCase().replace(" ", "_");
-                            const hiddenW = this.widgets.find(x => x.name === relatedName);
-                            if (hiddenW && hiddenW.value) {
-                                const selected = hiddenW.value.split(",").map(x => x.trim()).filter(x => x);
-                                if (selected.length > 0) {
-                                    const counts = getAvailableCounts(this, relatedName);
-                                    ctx.save();
-                                    let xPos = 15;
-                                    let yPos = w.last_y + 30; 
-                                    
-                                    const isExclude = relatedName.includes("exclude");
-                                    const isBase = relatedName === "base_models";
-                                    
-                                    // Premium Colors
-                                    let charColor = "#fff";
-                                    let bgColor = isBase ? "rgba(79, 70, 229, 0.4)" : (isExclude ? "rgba(225, 29, 72, 0.2)" : "rgba(16, 185, 129, 0.2)");
-                                    let strokeColor = isBase ? "rgba(99, 102, 241, 0.8)" : (isExclude ? "rgba(244, 63, 94, 0.8)" : "rgba(52, 211, 153, 0.8)");
-                                    let textColor = isBase ? "#e0e7ff" : (isExclude ? "#fecdd3" : "#d1fae5");
-
-                                    selected.forEach(sel => {
-                                        ctx.font = "11px Inter, sans-serif";
-                                        let txt = `${sel} (${counts[sel]||0})`;
-                                        let tw = ctx.measureText(txt).width;
-                                        
-                                        if (xPos + tw + 24 > this.size[0] - 15) {
-                                            xPos = 15;
-                                            yPos += 24;
-                                        }
-
-                                        // Chip rendering
-                                        ctx.beginPath();
-                                        ctx.roundRect(xPos, yPos - 12, tw + 20, 20, 6);
-                                        ctx.fillStyle = bgColor;
-                                        ctx.fill();
-                                        ctx.lineWidth = 1;
-                                        ctx.strokeStyle = strokeColor;
-                                        ctx.stroke();
-
-                                        ctx.fillStyle = textColor;
-                                        ctx.fillText(txt, xPos + 8, yPos + 2);
-
-                                        // Check for click/hover (approximate)
-                                        if (mouse && mouse[0] >= xPos && mouse[0] <= xPos + tw + 20 && 
-                                            mouse[1] >= yPos - 12 && mouse[1] <= yPos + 8) {
-                                            hoveredChip = { widget: hiddenW, value: sel };
-                                            ctx.strokeStyle = "#fff";
-                                            ctx.stroke();
-                                        }
-                                        
-                                        xPos += tw + 28;
-                                    });
-                                    ctx.restore();
-                                    
-                                    if (!w.originalComputeSize) w.originalComputeSize = w.computeSize;
-                                    w.computeSize = () => {
-                                        let base = w.originalComputeSize ? w.originalComputeSize.call(w) : [0, 28];
-                                        return [base[0], Math.max(28, yPos - w.last_y + 16)];
-                                    };
-                                } else {
-                                    if (w.originalComputeSize) w.computeSize = w.originalComputeSize;
-                                }
+                            };
+                            
+                            header.appendChild(title);
+                            header.appendChild(editBtn);
+                            section.appendChild(header);
+                            
+                            const chipsContainer = document.createElement("div");
+                            chipsContainer.className = "cc-chips-container";
+                            
+                            const selected = (internalW.value || "").split(",").map(x => x.trim()).filter(x => x);
+                            if (selected.length === 0) {
+                                const empty = document.createElement("div");
+                                empty.className = "cc-empty";
+                                empty.textContent = "No filters selected";
+                                chipsContainer.appendChild(empty);
+                            } else {
+                                const isExclude = wName.includes("exclude");
+                                const isBase = wName === "base_models";
+                                const chipClass = isBase ? "cc-chip-base" : (isExclude ? "cc-chip-exclude" : "cc-chip-include");
+                                const counts = getAvailableCounts(this, wName);
+                                
+                                selected.forEach(sel => {
+                                    const chip = document.createElement("div");
+                                    chip.className = \`cc-chip \${chipClass}\`;
+                                    chip.textContent = sel + (counts[sel] ? \` (\${counts[sel]})\` : "");
+                                    chipsContainer.appendChild(chip);
+                                });
                             }
-                        }
-                    }
+                            
+                            section.appendChild(chipsContainer);
+                            container.appendChild(section);
+                        });
+                    };
 
-                    // Store hovered info for click handler
-                    this._hovered_chip = hoveredChip;
+                    renderSections();
+                    
+                    const domWidget = this.addDOMWidget("cc_ui", "CC_UI", container, {
+                        serialize: false,
+                        getValue() { return ""; },
+                        setValue(v) { renderSections(); }
+                    });
+                    
+                    domWidget.computeSize = () => [Math.max(340, this.size[0]), 300];
+                    this.setSize([Math.max(this.size?.[0] || 340, 340), this.computeSize()[1]]);
                 };
 
-                // Add click handler to node to remove chips
-                const onMouseDown = this.onMouseDown;
-                this.onMouseDown = function(e, local_pos) {
-                    if (this._hovered_chip) {
-                        const { widget, value } = this._hovered_chip;
-                        let selected = widget.value.split(",").map(x => x.trim()).filter(x => x && x !== value);
-                        widget.value = selected.join(", ");
-                        updateCountDisplay();
+                // Remove legacy buttons if they exist
+                this.widgets = this.widgets.filter(w => w.type !== "button" || (!w.name.startsWith("+ Edit") && w.name !== "reset_cycle"));
+
+                requestAnimationFrame(() => {
+                    if (!this.widgets.find(w => w.name === "cc_ui")) {
+                        setupDOMWidget();
+                        
+                        this.addWidget("button", "reset_cycle", "Restart Cycle (Set index to 0)", () => {
+                            const currentIndexWidget = this.widgets.find((w) => w.name === "current_index");
+                            if (currentIndexWidget) {
+                                currentIndexWidget.value = 0;
+                            }
+                        });
+                        
                         app.graph.setDirtyCanvas(true, true);
-                        return true; // handled
-                    }
-                    if (onMouseDown) return onMouseDown.apply(this, arguments);
-                };
-
-                this.addWidget("button", "reset_cycle", "Restart Cycle (Set index to 0)", () => {
-                    const currentIndexWidget = this.widgets.find((w) => w.name === "current_index");
-                    if (currentIndexWidget) {
-                        currentIndexWidget.value = 0;
                     }
                 });
 
@@ -415,35 +479,11 @@ app.registerExtension({
             nodeType.prototype.onConfigure = function() {
                 if (onConfigure) onConfigure.apply(this, arguments);
                 requestAnimationFrame(() => {
-                    const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                    if (this.widgets) {
-                        this.widgets.forEach(w => {
-                            if (multiCombos.includes(w.name)) {
-                                w.computeSize = () => [0, 0];
-                            }
-                        });
-                        // buttons are already added by onNodeCreated if configured correctly, 
-                        // but let's ensure they are there if not.
-                        const multiCombosBtns = multiCombos.map(mc => "+ Edit " + mc.replace("_", " ").toUpperCase());
-                        multiCombosBtns.forEach((btnName, idx) => {
-                            if (!this.widgets.find(bw => bw.name === btnName)) {
-                                const wName = multiCombos[idx];
-                                this.addWidget("button", btnName, "Edit", () => {
-                                    const counts = getAvailableCounts(this, wName);
-                                    const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
-                                    const items = allNames.map(n => ({name: n, count: counts[n]}));
-                                    const selected = (this.widgets.find(x => x.name === wName).value || "").split(",").map(x => x.trim()).filter(x => x);
-                                    openModal("Select " + btnName.replace("+ Edit ", ""), items, selected, (newSelection) => {
-                                        const w = this.widgets.find(x => x.name === wName);
-                                        w.value = newSelection.join(", ");
-                                        app.graph.setDirtyCanvas(true, true);
-                                    });
-                                });
-                            }
-                        });
-                        this.setSize(this.computeSize());
-                        app.graph.setDirtyCanvas(true, true);
+                    const uiWidget = this.widgets.find(w => w.name === "cc_ui");
+                    if (uiWidget && uiWidget.options && uiWidget.options.setValue) {
+                        uiWidget.options.setValue("");
                     }
+                    app.graph.setDirtyCanvas(true, true);
                 });
             };
 
