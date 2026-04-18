@@ -239,9 +239,32 @@ app.registerExtension({
                         }
                     }
                 };
+                
+                var collapseWidgets = function() {
+                    if (!self.widgets) return;
+                    self.widgets.forEach(function(w) {
+                        if (customInputs.indexOf(w.name) !== -1) {
+                            w.type = "hidden";
+                            w.computeSize = function() { return [0, -4]; };
+                        }
+                    });
+                    
+                    // Reorder widgets: move hidden ones to the end to prevent gaps between visible rows
+                    var visible = [];
+                    var hidden = [];
+                    for (var i = 0; i < self.widgets.length; i++) {
+                        var w = self.widgets[i];
+                        if (w.type === "hidden") hidden.push(w);
+                        else visible.push(w);
+                    }
+                    self.widgets = visible.concat(hidden);
+                };
+
                 cleanupInputs();
-                setTimeout(cleanupInputs, 10);
-                setTimeout(cleanupInputs, 100);
+                collapseWidgets();
+                setTimeout(function() { cleanupInputs(); collapseWidgets(); }, 10);
+                setTimeout(function() { cleanupInputs(); collapseWidgets(); }, 100);
+
 
 
                 const updateCountDisplay = function() {
@@ -387,12 +410,18 @@ app.registerExtension({
                         }
                     }
                     if (self.widgets) {
+                        var visible = [];
+                        var hidden = [];
                         self.widgets.forEach(function(w) {
                             if (custom.indexOf(w.name) !== -1) {
                                 w.type = "hidden";
                                 w.computeSize = function() { return [0, -4]; };
+                                hidden.push(w);
+                            } else {
+                                visible.push(w);
                             }
                         });
+                        self.widgets = visible.concat(hidden);
                     }
                     app.graph.setDirtyCanvas(true, true);
                 };
