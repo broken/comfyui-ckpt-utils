@@ -220,24 +220,25 @@ app.registerExtension({
 
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
+            // Remove the custom filter fields from the required inputs so ComfyUI doesn't create slots (dots)
+            if (nodeData.input && nodeData.input.required) {
+                const toRemove = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                toRemove.forEach(function(name) {
+                    if (nodeData.input.required[name]) delete nodeData.input.required[name];
+                });
+            }
+
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
                 console.log("[CheckpointCycler] onNodeCreated...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
-                // Aggressively remove input slots that match our custom widgets
                 var self = this;
-                var customInputs = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                if (this.inputs) {
-                    this.inputs = this.inputs.filter(function(input) {
-                        return customInputs.indexOf(input.name) === -1;
-                    });
-                }
 
                 const updateCountDisplay = function() {
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
                     if (mWidget && cyclerMetadata) {
-                        mWidget.value = "Available cycle matches: " + calculateMatches(self);
+                        mWidget.value = calculateMatches(self);
                     } 
                 };
 
@@ -263,6 +264,7 @@ app.registerExtension({
                 
                 const setupDOMWidget = function() {
                     console.log("[CheckpointCycler] setupDOMWidget...");
+                    injectStyles();
                     try {
                         const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
                         const container = document.createElement("div");
@@ -401,7 +403,7 @@ app.registerExtension({
                 if (message.total_count) {
                     const mWidget = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
                     if (mWidget) {
-                        mWidget.value = "Available cycle matches: " + message.total_count[0];
+                        mWidget.value = message.total_count[0];
                     }
                 }
 
