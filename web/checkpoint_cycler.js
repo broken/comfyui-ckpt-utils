@@ -267,26 +267,30 @@ app.registerExtension({
                 
                 const setupMultiCombos = () => {
                     const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                    const widgetsToHide = this.widgets.filter(w => multiCombos.includes(w.name));
                     
-                    if (widgetsToHide.length === 0) return;
+                    if (!this.widgets) return;
 
-                    widgetsToHide.forEach(w => {
-                        // Ensure it stays completely hidden from layout calculations
-                        w.computeSize = () => [0, 0];
+                    multiCombos.forEach(wName => {
+                        const w = this.widgets.find(x => x.name === wName);
+                        if (w) {
+                            w.computeSize = () => [0, 0];
+                        }
 
                         // Add the button only if missing
-                        const title = w.name.replace("_", " ").toUpperCase();
+                        const title = wName.replace("_", " ").toUpperCase();
                         const btnName = "+ Edit " + title;
                         if (!this.widgets.find(bw => bw.name === btnName)) {
                             this.addWidget("button", btnName, "Edit", () => {
-                                const counts = getAvailableCounts(this, w.name);
+                                const counts = getAvailableCounts(this, wName);
                                 const allNames = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
                                 const items = allNames.map(n => ({name: n, count: counts[n]}));
-                                const selected = (w.value || "").split(",").map(x => x.trim()).filter(x => x);
+                                const internalW = this.widgets.find(x => x.name === wName);
+                                const selected = (internalW && internalW.value ? internalW.value : "").split(",").map(x => x.trim()).filter(x => x);
                                 
                                 openModal("Select " + title, items, selected, (newSelection) => {
-                                    w.value = newSelection.join(", ");
+                                    if (internalW) {
+                                        internalW.value = newSelection.join(", ");
+                                    }
                                     updateCountDisplay();
                                     app.graph.setDirtyCanvas(true, true);
                                 });
