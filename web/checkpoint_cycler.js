@@ -412,8 +412,7 @@ app.registerExtension({
                         domW.computeSize = function() { return [self.size[0], 220]; };
 
                         // Recalculate size NOW that we've added the DOM widget
-                        if (self.hasOwnProperty("onNodeCreated")) collapseWidgets();
-                        else purge();
+                        syncNodeLayout(self);
                     } catch (err) {
                         console.error("[CheckpointCycler] setupDOMWidget error:", err);
                     }
