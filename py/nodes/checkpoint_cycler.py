@@ -144,11 +144,11 @@ class CheckpointCyclerCU:
             cache = await scanner.get_cached_data()
             model_roots = scanner.get_model_roots()
             
-            inc_t = [t.strip().lower() for t in tags_include.split(',') if t.strip()]
-            exc_t = [t.strip().lower() for t in tags_exclude.split(',') if t.strip()]
-            inc_f = [f.strip().replace("\\", "/").lower() for f in folders_include.split(',') if f.strip()]
-            exc_f = [f.strip().replace("\\", "/").lower() for f in folders_exclude.split(',') if f.strip()]
-            b_models = [b.strip() for b in base_models.split(',') if b.strip()]
+            inc_t = [t.strip().lower() for t in str(tags_include).split(',') if t.strip()]
+            exc_t = [t.strip().lower() for t in str(tags_exclude).split(',') if t.strip()]
+            inc_f = [f.strip().replace("\\", "/").lower() for f in str(folders_include).split(',') if f.strip()]
+            exc_f = [f.strip().replace("\\", "/").lower() for f in str(folders_exclude).split(',') if f.strip()]
+            b_models = [b.strip() for b in str(base_models).split(',') if b.strip()]
             
             filtered = []
             for item in cache.raw_data:
