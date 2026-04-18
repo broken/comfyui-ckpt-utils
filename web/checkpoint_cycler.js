@@ -80,6 +80,82 @@ function calculateMatches(node) {
     return getFilteredCheckpoints(node).length;
 }
 
+function syncFromIndex(node, internalOnly) {
+    if (node._syncing) return;
+    node._syncing = true;
+    try {
+        const ckptW = node.widgets.find(w => w.name === "ckpt_name");
+        const ciw = node.widgets.find(w => w.name === "current_index");
+        const repeatsW = node.widgets.find(w => w.name === "repeats");
+        if (!ckptW || !ciw) return;
+        
+        const matches = getFilteredCheckpoints(node);
+        if (matches.length === 0) {
+            ckptW.options.values = ["(No matches)"];
+            ckptW.value = "(No matches)";
+            return;
+        }
+        
+        const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
+        const currentVal = parseInt(ciw.value) || 0;
+        const idx = Math.floor(currentVal / repeats) % matches.length;
+        const targetModel = matches[idx];
+        
+        if (targetModel && ckptW.value !== targetModel.name) {
+            ckptW.value = targetModel.name;
+            if (ckptW.callback && !internalOnly) ckptW.callback(ckptW.value);
+        }
+    } finally {
+        node._syncing = false;
+    }
+}
+
+function syncFromCkpt(node, internalOnly) {
+    if (node._syncing) return;
+    node._syncing = true;
+    try {
+        const ckptW = node.widgets.find(w => w.name === "ckpt_name");
+        const ciw = node.widgets.find(w => w.name === "current_index");
+        const repeatsW = node.widgets.find(w => w.name === "repeats");
+        if (!ckptW || !ciw) return;
+        
+        const matches = getFilteredCheckpoints(node);
+        const modelIdx = matches.findIndex(m => m.name === ckptW.value);
+        
+        if (modelIdx !== -1) {
+            const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
+            const newVal = modelIdx * repeats;
+            if (ciw.value !== newVal) {
+                ciw.value = newVal;
+                if (ciw.callback && !internalOnly) ciw.callback(newVal);
+            }
+        }
+    } finally {
+        node._syncing = false;
+    }
+}
+
+function updateCkptList(node) {
+    const ckptW = node.widgets.find(w => w.name === "ckpt_name");
+    if (!ckptW) return;
+    
+    const matches = getFilteredCheckpoints(node);
+    const names = matches.map(m => m.name);
+    
+    // Update combo values
+    ckptW.options.values = names.length > 0 ? names : ["(No matches)"];
+    
+    // Ensure current selection is still valid if possible, otherwise snap to index
+    const currentName = ckptW.value;
+    if (names.indexOf(currentName) === -1) {
+        // Current model no longer valid, snap to whatever the current index points to in the NEW list
+        syncFromIndex(node);
+    } else {
+        // Current model still valid, but its INDEX might have changed in the filtered list
+        syncFromCkpt(node);
+    }
+}
+
 const styles = ".lm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-family: sans-serif; } " +
 ".lm-modal { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); width: 450px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column; color: #eee; overflow: hidden; } " +
 ".lm-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: #252525; border-bottom: 1px solid #333; } " +
@@ -310,6 +386,12 @@ app.registerExtension({
 
 
 
+                const updateAll = function() {
+                    updateCountDisplay();
+                    updateCkptList(self);
+                    if (app.graph) app.graph.setDirtyCanvas(true, true);
+                };
+
                 const updateCountDisplay = function() {
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
                     if (mWidget && cyclerMetadata) {
@@ -327,8 +409,7 @@ app.registerExtension({
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
                     if (mWidget && data && data.checkpoints && data.checkpoints.length > 0) {
                         console.log("[CheckpointCycler] database ready, updating display");
-                        updateCountDisplay();
-                        app.graph.setDirtyCanvas(true, true);
+                        updateAll();
                     } else if (mWidget) {
                         mWidget.value = (data && data.checkpoints) ? "Scanning checkpoints..." : "Database connection failed";
                         console.log("[CheckpointCycler] Database not ready yet: ", mWidget.value);
@@ -336,8 +417,34 @@ app.registerExtension({
                     }
                 };
 
-
                 initialPoll();
+
+                // Setup Two-Way Sync Callbacks
+                const ckptW = this.widgets.find(w => w.name === "ckpt_name");
+                const ciW = this.widgets.find(w => w.name === "current_index");
+                const repeatsW = this.widgets.find(w => w.name === "repeats");
+
+                if (ckptW) {
+                    const oldCb = ckptW.callback;
+                    ckptW.callback = function() {
+                        if (oldCb) oldCb.apply(this, arguments);
+                        syncFromCkpt(self);
+                    };
+                }
+                if (ciW) {
+                    const oldCb = ciW.callback;
+                    ciW.callback = function() {
+                        if (oldCb) oldCb.apply(this, arguments);
+                        syncFromIndex(self);
+                    };
+                }
+                if (repeatsW) {
+                    const oldCb = repeatsW.callback;
+                    repeatsW.callback = function() {
+                        if (oldCb) oldCb.apply(this, arguments);
+                        syncFromIndex(self);
+                    };
+                }
 
                 this.addWidget("text", "total_matching_models", "Connecting to database...", function() {});
                 const mw = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
@@ -387,9 +494,8 @@ app.registerExtension({
                                     
                                     openModal("Select " + wName.toUpperCase(), items, selected, function(newSelection) {
                                         internalW.value = newSelection.join(", ");
-                                        updateCountDisplay();
+                                        updateAll();
                                         renderSections();
-                                        app.graph.setDirtyCanvas(true, true);
                                     });
                                 };
                                 
@@ -502,14 +608,9 @@ app.registerExtension({
         app.queuePrompt = async function(number, batch_count) {
             const count = Math.max(1, parseInt(batch_count) || 1);
             
-            // Check readiness if any cyclers are in Auto mode
+            // Check readiness if any cyclers are active
             const cyclerNodes = app.graph.findNodesByType("Checkpoint Cycler");
-            const needsAuto = cyclerNodes.some(n => {
-                const w = n.widgets.find(x => x.name === "ckpt_name");
-                return w && w.value === "Auto (Cycle)";
-            });
-
-            if (needsAuto && (!cyclerMetadata || !cyclerMetadata.checkpoints || cyclerMetadata.checkpoints.length === 0)) {
+            if (cyclerNodes.length > 0 && (!cyclerMetadata || !cyclerMetadata.checkpoints || cyclerMetadata.checkpoints.length === 0)) {
                 alert("Checkpoint Cycler: Database not ready. Please wait for the scanner to finish.");
                 return;
             }
@@ -518,41 +619,29 @@ app.registerExtension({
             
             let lastResult;
             for (let i = 0; i < count; i++) {
-                for (const node of cyclerNodes) {
-                    const ckptW = node.widgets.find(w => w.name === "ckpt_name");
-                    if (ckptW && ckptW.value === "Auto (Cycle)") {
-                        const ciw = node.widgets.find(w => w.name === "current_index");
-                        const repeatsW = node.widgets.find(w => w.name === "repeats");
-                        const lockedNameW = node.widgets.find(w => w.name === "locked_ckpt_name");
-                        const lockedTagsW = node.widgets.find(w => w.name === "locked_tags");
-                        
-                        if (ciw) {
-                            const matches = getFilteredCheckpoints(node);
-                            const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
-                            const maxSteps = matches.length * (repeats || 1);
-                            
-                            if (maxSteps > 0) {
-                                const currentVal = parseInt(ciw.value) || 0;
-                                
-                                // 1. Resolve and Lock using the CURRENT value
-                                const cycleIdx = Math.floor(currentVal / repeats) % matches.length;
-                                const selected = matches[cycleIdx];
-                                if (selected) {
-                                    if (lockedNameW) lockedNameW.value = selected.name;
-                                    if (lockedTagsW) lockedTagsW.value = selected.tags ? selected.tags.join(", ") : "";
-                                    console.log(`[CheckpointCycler] Execution ${i+1}/${count}: Locked to ${selected.name} (Index: ${currentVal})`);
-                                }
+                // Call original to queue THIS prompt with CURRENT widget values
+                lastResult = await originalQueuePrompt.call(this, number, 1);
 
-                                // 2. Increment for the NEXT execution
-                                const newVal = (currentVal + 1) % maxSteps;
-                                ciw.value = newVal;
-                                if (ciw.callback) ciw.callback(newVal);
-                            }
+                // Increment for the NEXT execution
+                for (const node of cyclerNodes) {
+                    const ciw = node.widgets.find(w => w.name === "current_index");
+                    const repeatsW = node.widgets.find(w => w.name === "repeats");
+                    
+                    if (ciw) {
+                        const matches = getFilteredCheckpoints(node);
+                        const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
+                        const maxSteps = matches.length * (repeats || 1);
+                        
+                        if (maxSteps > 0) {
+                            const currentVal = parseInt(ciw.value) || 0;
+                            const newVal = (currentVal + 1) % maxSteps;
+                            
+                            // Setting value and calling callback triggers syncFromIndex(node)
+                            ciw.value = newVal;
+                            if (ciw.callback) ciw.callback(newVal);
                         }
                     }
                 }
-                // Call original once to queue this specific prompt
-                lastResult = await originalQueuePrompt.call(this, number, 1);
             }
             
             return lastResult;

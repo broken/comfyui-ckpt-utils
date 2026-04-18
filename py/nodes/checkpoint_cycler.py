@@ -110,7 +110,7 @@ class CheckpointCyclerCU:
         
         return {
             "required": {
-                "ckpt_name": (["Auto (Cycle)"] + names, {"default": "Auto (Cycle)"}),
+                "ckpt_name": (names, {"default": names[0] if names else ""}),
                 "base_models": ("CC_BASE_MODELS", {"default": ""}),
                 "tags_include": ("CC_TAGS_INCLUDE", {"default": ""}),
                 "tags_exclude": ("CC_TAGS_EXCLUDE", {"default": ""}),
@@ -224,28 +224,20 @@ class CheckpointCyclerCU:
                 }
             }
 
-        # 1. Handle explicit selection (not Auto) or Locked value
+        # 1. Determine target checkpoint
+        # UI now synchronizes ckpt_name to current_index BEFORE queuing.
         target_name = ckpt_name
         target_tags = None
         
-        if ckpt_name == "Auto (Cycle)":
-            if locked_ckpt_name:
-                # Strict check: must exist in current library
-                all_names = folder_paths.get_filename_list("checkpoints")
-                if locked_ckpt_name in all_names:
-                    target_name = locked_ckpt_name
-                    target_tags = locked_tags
-                else:
-                    raise FileNotFoundError(f"Checkpoint Cycler: Locked model '{locked_ckpt_name}' not found. Stopping execution to prevent drift.")
-            else:
-                # Fallback to index-based cycling (API/Legacy)
-                real_idx = max(0, current_index)
-                cycle_idx = (real_idx // max(1, repeats)) % len(models)
-                selected = models[cycle_idx]
-                target_name = selected["name"]
-                target_tags = selected["tags"]
-        
-        # Resolve tags if not already known from lock
+        # Fallback: If ckpt_name is missing or looks like an index-based request (unlikely with new UI)
+        if not target_name or target_name == "Auto (Cycle)":
+            real_idx = max(0, current_index)
+            cycle_idx = (real_idx // max(1, repeats)) % len(models)
+            selected = models[cycle_idx]
+            target_name = selected["name"]
+            target_tags = selected["tags"]
+
+        # 2. Resolve tags if not already known
         if target_tags is None:
             for m in models:
                 if m["name"] == target_name:
