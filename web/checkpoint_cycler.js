@@ -206,18 +206,20 @@ app.registerExtension({
     getCustomWidgets() {
         console.log("[CheckpointCycler] getCustomWidgets() executed");
         const createHiddenDataWidget = function(node, inputName, inputData) {
-            console.log("[CheckpointCycler] Adding hidden widget:", inputName);
+            console.log("[CheckpointCycler] Adding hidden data widget:", inputName);
             const w = {
-                type: "text",
+                type: "hidden",
                 name: inputName,
-                value: inputData[1] && inputData[1].default ? inputData[1].default : "",
+                value: String(inputData[1] && inputData[1].default ? inputData[1].default : ""),
                 options: { serialize: true },
-                computeSize: function() { return [0, -4]; }
+                draw: function() { return; },
+                computeSize: function() { return [0, 0]; }
             };
             if (!node.widgets) node.widgets = [];
             node.widgets.push(w);
             return { widget: w };
         };
+
 
         return {
             CC_BASE_MODELS: createHiddenDataWidget,
@@ -293,16 +295,17 @@ app.registerExtension({
                 };
 
                 const initialPoll = async function() {
-                    await fetchMetadata();
+                    const data = await fetchMetadata();
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                    if (mWidget && cyclerMetadata) {
+                    if (mWidget && data && data.checkpoints && data.checkpoints.length > 0) {
                         updateCountDisplay();
                         app.graph.setDirtyCanvas(true, true);
                     } else if (mWidget) {
-                        mWidget.value = "Waiting for background scanner...";
+                        mWidget.value = (data && data.checkpoints) ? "Waiting for background scanner..." : "Database connection failed";
                         setTimeout(initialPoll, 2000);
                     }
                 };
+
                 initialPoll();
 
                 this.addWidget("text", "total_matching_models", "Connecting to database...", function() {});
