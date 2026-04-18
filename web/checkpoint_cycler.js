@@ -381,8 +381,8 @@ app.registerExtension({
                             getValue: function() { return ""; },
                             setValue: function(v) { renderSections(); }
                         });
-                        domW.computeSize = function() { return [Math.max(340, self.size[0]), 300]; };
-                        self.setSize([Math.max(self.size[0], 340), domW.computeSize()[1]]);
+                        domW.computeSize = function() { return [self.size[0], 220]; };
+
                     } catch (err) {
                         console.error("[CheckpointCycler] setupDOMWidget error:", err);
                     }
