@@ -122,6 +122,8 @@ class CheckpointCyclerCU:
             "hidden": {
                 "unique_id": "UNIQUE_ID",
                 "last_selected_ckpt": "STRING",
+                "locked_ckpt_name": "STRING",
+                "locked_tags": "STRING",
             }
         }
 
@@ -141,7 +143,7 @@ class CheckpointCyclerCU:
         import time
         return time.time()
 
-    def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt=""):
+    def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt="", locked_ckpt_name="", locked_tags=""):
         import asyncio
         
         async def _get_models():
@@ -222,40 +224,38 @@ class CheckpointCyclerCU:
                 }
             }
 
-        if ckpt_name != "Auto (Cycle)":
-            matched_tags = ""
+        # 1. Handle explicit selection (not Auto) or Locked value
+        target_name = ckpt_name
+        target_tags = None
+        
+        if ckpt_name == "Auto (Cycle)":
+            if locked_ckpt_name:
+                # Strict check: must exist in current library
+                all_names = folder_paths.get_filename_list("checkpoints")
+                if locked_ckpt_name in all_names:
+                    target_name = locked_ckpt_name
+                    target_tags = locked_tags
+                else:
+                    raise FileNotFoundError(f"Checkpoint Cycler: Locked model '{locked_ckpt_name}' not found. Stopping execution to prevent drift.")
+            else:
+                # Fallback to index-based cycling (API/Legacy)
+                real_idx = max(0, current_index)
+                cycle_idx = (real_idx // max(1, repeats)) % len(models)
+                selected = models[cycle_idx]
+                target_name = selected["name"]
+                target_tags = selected["tags"]
+        
+        # Resolve tags if not already known from lock
+        if target_tags is None:
             for m in models:
-                if m["name"] == ckpt_name:
-                    matched_tags = m["tags"]
+                if m["name"] == target_name:
+                    target_tags = m["tags"]
                     break
-            
-            return {
-                "result": (ckpt_name, matched_tags, len(models)),
-                "ui": {
-                    "last_selected_ckpt": [ckpt_name],
-                    "current_index": [current_index],
-                    "total_count": [len(models)]
-                }
-            }
-
-        real_idx = max(0, current_index)
-        cycle_idx = (real_idx // max(1, repeats)) % len(models)
-        
-        selected = models[cycle_idx]
-        selected_name = selected["name"]
-        selected_tags = selected["tags"]
-        
-        real_idx = max(0, current_index)
-        cycle_idx = (real_idx // max(1, repeats)) % len(models)
-        
-        selected = models[cycle_idx]
-        selected_name = selected["name"]
-        selected_tags = selected["tags"]
         
         return {
-            "result": (selected_name, selected_tags, len(models)),
+            "result": (target_name, target_tags or "", len(models)),
             "ui": {
-                "last_selected_ckpt": [selected_name],
+                "last_selected_ckpt": [target_name],
                 "total_count": [len(models)]
             }
         }

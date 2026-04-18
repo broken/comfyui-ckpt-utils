@@ -37,11 +37,10 @@ async function fetchMetadata() {
     return await fetchOngoing;
 }
 
-function calculateMatches(node, overrideKey, overrideValue) {
-    if (!cyclerMetadata || !cyclerMetadata.checkpoints) return 0;
+function getFilteredCheckpoints(node) {
+    if (!cyclerMetadata || !cyclerMetadata.checkpoints) return [];
     
     const getVal = (name) => {
-        if (name === overrideKey) return overrideValue;
         const w = node.widgets.find(function(x) { return x.name === name; });
         return w ? w.value : "";
     };
@@ -52,7 +51,7 @@ function calculateMatches(node, overrideKey, overrideValue) {
     const inc_f = String(getVal("folders_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
     const exc_f = String(getVal("folders_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
 
-    let count = 0;
+    let filtered = [];
     for (let i = 0; i < cyclerMetadata.checkpoints.length; i++) {
         const c = cyclerMetadata.checkpoints[i];
         if (b_models.length > 0 && b_models.indexOf(c.base_model) === -1) continue;
@@ -69,10 +68,16 @@ function calculateMatches(node, overrideKey, overrideValue) {
         const hasExcF = exc_f.length > 0 && exc_f.some(function(f) { return c.folder && c.folder.indexOf(f) !== -1; });
         if (hasExcF) continue;
         
-        count++;
+        filtered.push(c);
     }
-    console.log("[CheckpointCycler] CalculateMatches count:", count, "Filters:", {b_models, inc_t, exc_t, inc_f, exc_f});
-    return count;
+    
+    // Match Python sorting logic
+    filtered.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    return filtered;
+}
+
+function calculateMatches(node) {
+    return getFilteredCheckpoints(node).length;
 }
 
 const styles = ".lm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-family: sans-serif; } " +
@@ -495,32 +500,62 @@ app.registerExtension({
         // 1. Hook into Queue Prompt to provide "instant" cycling like seeds
         const originalQueuePrompt = app.queuePrompt;
         app.queuePrompt = async function(number, batch_count) {
-            console.log("[CheckpointCycler] queuePrompt intercepted, checking for cyclers...");
+            const count = Math.max(1, parseInt(batch_count) || 1);
             
+            // Check readiness if any cyclers are in Auto mode
             const cyclerNodes = app.graph.findNodesByType("Checkpoint Cycler");
-            for (const node of cyclerNodes) {
-                const ckptW = node.widgets.find(w => w.name === "ckpt_name");
-                if (ckptW && ckptW.value === "Auto (Cycle)") {
-                    const ciw = node.widgets.find(w => w.name === "current_index");
-                    const repeatsW = node.widgets.find(w => w.name === "repeats");
-                    
-                    if (ciw) {
-                        const total = calculateMatches(node);
-                        const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
-                        const maxSteps = total * (repeats || 1);
+            const needsAuto = cyclerNodes.some(n => {
+                const w = n.widgets.find(x => x.name === "ckpt_name");
+                return w && w.value === "Auto (Cycle)";
+            });
+
+            if (needsAuto && (!cyclerMetadata || !cyclerMetadata.checkpoints || cyclerMetadata.checkpoints.length === 0)) {
+                alert("Checkpoint Cycler: Database not ready. Please wait for the scanner to finish.");
+                return;
+            }
+
+            console.log("[CheckpointCycler] queuePrompt intercepted, total executions:", count);
+            
+            let lastResult;
+            for (let i = 0; i < count; i++) {
+                for (const node of cyclerNodes) {
+                    const ckptW = node.widgets.find(w => w.name === "ckpt_name");
+                    if (ckptW && ckptW.value === "Auto (Cycle)") {
+                        const ciw = node.widgets.find(w => w.name === "current_index");
+                        const repeatsW = node.widgets.find(w => w.name === "repeats");
+                        const lockedNameW = node.widgets.find(w => w.name === "locked_ckpt_name");
+                        const lockedTagsW = node.widgets.find(w => w.name === "locked_tags");
                         
-                        if (maxSteps > 0) {
-                            const currentVal = parseInt(ciw.value) || 0;
-                            const newVal = (currentVal + 1) % maxSteps;
-                            console.log(`[CheckpointCycler] Instant increment: ${currentVal} -> ${newVal} (Total: ${total}, Repeats: ${repeats})`);
-                            ciw.value = newVal;
-                            if (ciw.callback) ciw.callback(newVal);
+                        if (ciw) {
+                            const matches = getFilteredCheckpoints(node);
+                            const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
+                            const maxSteps = matches.length * (repeats || 1);
+                            
+                            if (maxSteps > 0) {
+                                const currentVal = parseInt(ciw.value) || 0;
+                                const newVal = (currentVal + 1) % maxSteps;
+                                
+                                // Update UI instantly
+                                ciw.value = newVal;
+                                if (ciw.callback) ciw.callback(newVal);
+
+                                // Resolve and Lock for this specific execution
+                                const cycleIdx = Math.floor(newVal / repeats) % matches.length;
+                                const selected = matches[cycleIdx];
+                                if (selected) {
+                                    if (lockedNameW) lockedNameW.value = selected.name;
+                                    if (lockedTagsW) lockedTagsW.value = selected.tags ? selected.tags.join(", ") : "";
+                                    console.log(`[CheckpointCycler] Execution ${i+1}/${count}: Locked to ${selected.name} (Index: ${newVal})`);
+                                }
+                            }
                         }
                     }
                 }
+                // Call original once to queue this specific prompt
+                lastResult = await originalQueuePrompt.call(this, number, 1);
             }
             
-            return originalQueuePrompt.apply(this, arguments);
+            return lastResult;
         };
     }
 });
