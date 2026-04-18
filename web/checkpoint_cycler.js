@@ -36,11 +36,11 @@ function calculateMatches(node, overrideKey, overrideValue) {
         return w ? w.value : "";
     };
 
-    const b_models = (getVal("base_models") || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
-    const inc_t = (getVal("tags_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
-    const exc_t = (getVal("tags_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
-    const inc_f = (getVal("folders_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
-    const exc_f = (getVal("folders_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const b_models = String(getVal("base_models") || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const inc_t = String(getVal("tags_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const exc_t = String(getVal("tags_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const inc_f = String(getVal("folders_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const exc_f = String(getVal("folders_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
 
     let count = 0;
     for (let i = 0; i < cyclerMetadata.checkpoints.length; i++) {
@@ -290,7 +290,7 @@ app.registerExtension({
                                     const counts = getAvailableCounts(self, wName);
                                     const allNames = Object.keys(counts).sort(function(a,b) { return counts[b] - counts[a]; });
                                     const items = allNames.map(function(n) { return {name: n, count: counts[n]}; });
-                                    const selected = (internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+                                    const selected = String(internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
                                     
                                     openModal("Select " + wName.toUpperCase(), items, selected, function(newSelection) {
                                         internalW.value = newSelection.join(", ");
@@ -306,7 +306,7 @@ app.registerExtension({
                                 
                                 const chipsCont = document.createElement("div");
                                 chipsCont.className = "cc-chips-container";
-                                const selected = (internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+                                const selected = String(internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
                                 if (selected.length === 0) {
                                     const empty = document.createElement("div");
                                     empty.className = "cc-empty";
