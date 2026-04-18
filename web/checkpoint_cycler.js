@@ -97,7 +97,8 @@ const styles = ".lm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; b
 ".cc-chip-include { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #10b981; } " +
 ".cc-chip-exclude { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #ef4444; } " +
 ".cc-chip-count { opacity: 0.6; font-size: 10px; margin-left: 4px; } " +
-".cc-empty { font-size: 10px; opacity: 0.3; font-style: italic; width: 100%; text-align: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px; }";
+".cc-empty { font-size: 10px; opacity: 0.3; font-style: italic; width: 100%; text-align: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px; } " +
+'[data-widget-name="base_models"], [data-widget-name="tags_include"], [data-widget-name="tags_exclude"], [data-widget-name="folders_include"], [data-widget-name="folders_exclude"] { display: none !important; visibility: hidden !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }';
 
 function injectStyles() {
     if (!document.getElementById("ckpt-cycler-styles")) {
@@ -479,10 +480,16 @@ app.registerExtension({
             const onExecuted = nodeType.prototype.onExecuted;
             nodeType.prototype.onExecuted = function (message) {
                 if (onExecuted) onExecuted.apply(this, arguments);
-
-                if (message.current_index) {
-                    const idxWidget = this.widgets.find(function(w) { return w.name === "current_index"; });
-                    if (idxWidget) idxWidget.value = message.current_index[0];
+                const self = this;
+                const ciw = self.widgets.find(function(w) { return w.name === "current_index"; });
+                
+                if (ciw && message) {
+                    // Python sends as a list [val], extract 0th element
+                    const newIdx = Array.isArray(message.current_index) ? message.current_index[0] : message.current_index;
+                    if (newIdx !== undefined) {
+                        console.log("[CheckpointCycler] Syncing current_index from server:", newIdx);
+                        ciw.value = newIdx;
+                    }
                 }
                 
                 if (message.total_count) {
