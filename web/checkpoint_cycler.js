@@ -98,8 +98,6 @@ function injectStyles() {
 }
 
 function openModal(title, items, selectedItems, onSave) {
-    injectStyles();
-    
     let currentSelection = new Set(selectedItems);
     const backdrop = document.createElement("div");
     backdrop.className = "lm-modal-backdrop";
@@ -189,6 +187,8 @@ function getAvailableCounts(node, fieldName) {
     });
     return counts;
 }
+
+injectStyles();
 
 app.registerExtension({
     name: "comfyui-ckpt-utils.CheckpointCycler",
