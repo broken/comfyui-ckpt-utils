@@ -644,54 +644,64 @@ app.registerExtension({
             
             let lastResult;
             for (let i = 0; i < count; i++) {
-                // Call original to queue THIS prompt with CURRENT widget values
-                lastResult = await originalQueuePrompt.call(this, number, 1);
-
-                // Increment for the NEXT execution
-                for (const node of cyclerNodes) {
+                // 1. Capture snapshots of all nodes BEFORE this prompt is queued
+                // This prevents double-counting if ComfyUI's native logic also triggers an increment.
+                const snapshots = cyclerNodes.map(node => {
                     const ciw = node.widgets.find(w => w.name === "current_index");
                     const repeatsW = node.widgets.find(w => w.name === "repeats");
+                    const controlW = node.widgets.find(w => w.name === "current_index_control") || 
+                                     node.widgets.find(w => w.name === "control_after_generate");
+                    return {
+                        node,
+                        ciw,
+                        startVal: ciw ? parseInt(ciw.value) || 0 : 0,
+                        repeats: repeatsW ? parseInt(repeatsW.value) || 1 : 1,
+                        mode: controlW ? controlW.value : "increment"
+                    };
+                });
+
+                // 2. Call original to queue THIS prompt with CURRENT widget values
+                lastResult = await originalQueuePrompt.call(this, number, 1);
+
+                // 3. Increment for the NEXT execution
+                for (const snap of snapshots) {
+                    const { node, ciw, startVal, repeats, mode } = snap;
+                    if (!ciw) continue;
+
+                    const matches = getFilteredCheckpoints(node);
+                    const totalSteps = matches.length * repeats;
+                    let newVal = startVal;
+
+                    if (mode === "increment") {
+                        newVal = startVal + 1;
+                    } else if (mode === "decrement") {
+                        newVal = startVal - 1;
+                    } else if (mode === "randomize") {
+                        // Smart Randomize: Only pick a new model if the current repeat cycle is finished
+                        const iteration = (startVal % repeats) + 1;
+                        if (iteration >= repeats) {
+                            // Cycle finished, pick new random model start
+                            newVal = Math.floor(Math.random() * Math.max(1, matches.length)) * repeats;
+                        } else {
+                            // Still repeating current model
+                            newVal = startVal + 1;
+                        }
+                    }
                     
-                    if (ciw) {
-                        const matches = getFilteredCheckpoints(node);
-                        const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
-                        const totalSteps = matches.length * repeats;
-                        
-                        // Find the control widget (ComfyUI auto-creates this when control_after_generate is true)
-                        // It is typically named "current_index_control" or similar
-                        const controlW = node.widgets.find(w => w.name === "current_index_control") || 
-                                         node.widgets.find(w => w.name === "control_after_generate"); // fallback
-                        
-                        const mode = controlW ? controlW.value : "increment";
-                        const currentVal = parseInt(ciw.value) || 0;
-                        let newVal = currentVal;
+                    // Wrap around for increment/decrement if we have steps
+                    if (totalSteps > 0 && (mode === "increment" || mode === "decrement")) {
+                        newVal = newVal % totalSteps;
+                        if (newVal < 0) newVal += totalSteps;
+                    }
 
-                        if (mode === "increment") {
-                            newVal = (currentVal + 1);
-                        } else if (mode === "decrement") {
-                            newVal = (currentVal - 1);
-                        } else if (mode === "randomize") {
-                            // Smart Randomize: Only pick a new model if the current repeat cycle is finished
-                            const iteration = (currentVal % repeats) + 1;
-                            if (iteration >= repeats) {
-                                // Cycle finished, pick new random model start
-                                newVal = Math.floor(Math.random() * Math.max(1, matches.length)) * repeats;
-                            } else {
-                                // Still repeating current model
-                                newVal = currentVal + 1;
-                            }
-                        }
-                        
-                        // Wrap around for increment/decrement if we have steps
-                        if (totalSteps > 0 && (mode === "increment" || mode === "decrement")) {
-                            newVal = newVal % totalSteps;
-                            if (newVal < 0) newVal += totalSteps;
-                        }
-
-                        if (mode !== "fixed" && ciw.value !== newVal) {
+                    if (mode !== "fixed") {
+                        // Even if ciw.value is already newVal (thanks to ComfyUI's native post-queue increment),
+                        // we explicitly set it or trigger the callback to ensure ckpt_name and UI stay in sync.
+                        if (ciw.value !== newVal) {
                             ciw.value = newVal;
-                            if (ciw.callback) ciw.callback(newVal);
                         }
+                        // Always trigger to ensure UI consistency
+                        if (ciw.callback) ciw.callback(newVal);
                     }
                 }
             }
