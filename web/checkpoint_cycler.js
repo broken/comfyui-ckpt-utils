@@ -203,7 +203,6 @@ function getAvailableCounts(node, fieldName) {
 function syncNodeLayout(node) {
     if (!node || !node.widgets) return;
     var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-    var totalH = 34; // Tighter title bar
     
     // 1. Suppress Inputs (the dots)
     if (node.inputs) {
@@ -215,58 +214,33 @@ function syncNodeLayout(node) {
     var visible = [];
     var hidden = [];
 
-    // 2. Suppress Widgets and their DOM elements
+    // 2. Classify and Clean Widgets
     node.widgets.forEach(function(w) {
         if (custom.indexOf(w.name) !== -1) {
             w.type = "hidden";
             w.draw = function() { return; };
             w.computeSize = function() { return [0, 0]; };
             
-            // Forcefully remove the HTML element if ComfyUI created one
-            const cleanupEl = function(el) {
-                if (el) {
-                    el.style.display = "none";
-                    el.style.height = "0px";
-                    el.style.overflow = "hidden";
-                    if (el.parentNode) el.parentNode.removeChild(el);
-                }
-            };
-            
-            cleanupEl(w.inputEl);
-            cleanupEl(w.element);
-            cleanupEl(w.contentElement);
-            w.inputEl = null;
-            w.element = null;
-            w.contentElement = null;
-
+            // Clean DOM references but don't climb parents here (handled by CSS)
+            if (w.inputEl) {
+                w.inputEl.style.display = "none";
+                w.inputEl.style.height = "0px";
+                w.inputEl = null;
+            }
             hidden.push(w);
         } else {
             visible.push(w);
-            var h = 24;
-            if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
-            else if (w.computeSize) h = w.computeSize()[1];
-            totalH += h + 2;
         }
     });
 
-    // 3. NUCLEAR WIPE: Find any orphaned inputs in the DOM related to this node
-    if (node.id) {
-        const orphans = document.querySelectorAll('[id*="' + node.id + '"]');
-        orphans.forEach(el => {
-            custom.forEach(f => {
-                if (el.id && el.id.indexOf(f) !== -1) {
-                    el.style.display = "none";
-                    if (el.parentNode) el.parentNode.removeChild(el);
-                }
-            });
-        });
-    }
-
-    // 4. Reorder to put hidden at the end
+    // 3. Reorder: Visible first, then hidden
     node.widgets = visible.concat(hidden);
     
-    // 5. Force Resize
-    node.size[1] = totalH + 2;
+    // 4. Update Y Coordinates and Size
+    if (node.onComputeSize) {
+        var sz = node.onComputeSize();
+        node.setSize([Math.max(node.size[0], sz[0]), sz[1]]);
+    }
     if (app.graph) app.graph.setDirtyCanvas(true, true);
 }
 
@@ -306,7 +280,8 @@ app.registerExtension({
         if (nodeData.name === "Checkpoint Cycler") {
             console.log("[CheckpointCycler] beforeRegisterNodeDef matching Checkpoint Cycler");
 
-            const onNodeCreated = nodeType.prototype.onNodeCreated;            nodeType.prototype.onNodeCreated = function () {
+            const onNodeCreated = nodeType.prototype.onNodeCreated;
+            nodeType.prototype.onNodeCreated = function () {
                 console.log("[CheckpointCycler] onNodeCreated running...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
@@ -315,7 +290,24 @@ app.registerExtension({
                 sync();
                 setTimeout(sync, 10);
                 setTimeout(sync, 100);
-;
+
+                // Implement standard computeSize override
+                this.onComputeSize = function() {
+                    var h = 34; // Header
+                    var currentY = 30;
+                    if (this.widgets) {
+                        this.widgets.forEach(function(w) {
+                            if (w.type !== "hidden") {
+                                var wh = 24;
+                                if (w.computeSize) wh = w.computeSize()[1];
+                                w.y = currentY;
+                                currentY += wh + 4;
+                                h = currentY;
+                            }
+                        });
+                    }
+                    return [this.size[0], h + 6];
+                };
 
 
 
