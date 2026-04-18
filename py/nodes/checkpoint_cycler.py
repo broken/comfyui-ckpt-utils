@@ -135,6 +135,12 @@ class CheckpointCyclerCU:
         # Allow multi-select string concatenation to safely bypass standard combo box bounds
         return True
 
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        # Force re-execution on every run by returning a random value
+        import time
+        return time.time()
+
     def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt=""):
         import asyncio
         
@@ -239,13 +245,17 @@ class CheckpointCyclerCU:
         selected_name = selected["name"]
         selected_tags = selected["tags"]
         
-        next_index = current_index + 1
+        real_idx = max(0, current_index)
+        cycle_idx = (real_idx // max(1, repeats)) % len(models)
+        
+        selected = models[cycle_idx]
+        selected_name = selected["name"]
+        selected_tags = selected["tags"]
         
         return {
             "result": (selected_name, selected_tags, len(models)),
             "ui": {
                 "last_selected_ckpt": [selected_name],
-                "current_index": [next_index],
                 "total_count": [len(models)]
             }
         }

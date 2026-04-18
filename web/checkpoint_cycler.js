@@ -470,35 +470,57 @@ app.registerExtension({
                 });
             };;
 
-            const onExecuted = nodeType.prototype.onExecuted;
-            nodeType.prototype.onExecuted = function (message) {
-                if (onExecuted) onExecuted.apply(this, arguments);
-                const self = this;
-                const ciw = self.widgets.find(function(w) { return w.name === "current_index"; });
-                
-                if (ciw && message) {
-                    console.log("[CheckpointCycler] onExecuted message received:", message);
-                    // Python sends as a list [val], extract 0th element
-                    const newIdx = Array.isArray(message.current_index) ? message.current_index[0] : message.current_index;
-                    if (newIdx !== undefined) {
-                        console.log("[CheckpointCycler] Syncing current_index from server:", ciw.value, "->", newIdx);
-                        ciw.value = newIdx;
-                        if (ciw.callback) ciw.callback(newIdx);
+                const onExecuted = nodeType.prototype.onExecuted;
+                nodeType.prototype.onExecuted = function (message) {
+                    if (onExecuted) onExecuted.apply(this, arguments);
+                    const self = this;
+                    
+                    if (message.total_count) {
+                        const mWidget = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                        if (mWidget) {
+                            mWidget.value = String(message.total_count[0]);
+                            if (mWidget.inputEl) mWidget.inputEl.value = mWidget.value;
+                        }
                     }
-                }
-                
-                if (message.total_count) {
-                    const mWidget = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                    if (mWidget) {
-                        mWidget.value = message.total_count[0];
-                    }
-                }
 
-                if (message.last_selected_ckpt) {
-                    const ckptWidget = this.widgets.find(function(w) { return w.name === "last_selected_ckpt"; });
-                    if (ckptWidget) ckptWidget.value = message.last_selected_ckpt[0];
-                }
-            };
+                    if (message.last_selected_ckpt) {
+                        const ckptWidget = this.widgets.find(function(w) { return w.name === "last_selected_ckpt"; });
+                        if (ckptWidget) ckptWidget.value = message.last_selected_ckpt[0];
+                    }
+                };
         }
+    },
+
+    setup() {
+        // 1. Hook into Queue Prompt to provide "instant" cycling like seeds
+        const originalQueuePrompt = app.queuePrompt;
+        app.queuePrompt = async function(number, batch_count) {
+            console.log("[CheckpointCycler] queuePrompt intercepted, checking for cyclers...");
+            
+            const cyclerNodes = app.graph.findNodesByType("Checkpoint Cycler");
+            for (const node of cyclerNodes) {
+                const ckptW = node.widgets.find(w => w.name === "ckpt_name");
+                if (ckptW && ckptW.value === "Auto (Cycle)") {
+                    const ciw = node.widgets.find(w => w.name === "current_index");
+                    const repeatsW = node.widgets.find(w => w.name === "repeats");
+                    
+                    if (ciw) {
+                        const total = calculateMatches(node);
+                        const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
+                        const maxSteps = total * (repeats || 1);
+                        
+                        if (maxSteps > 0) {
+                            const currentVal = parseInt(ciw.value) || 0;
+                            const newVal = (currentVal + 1) % maxSteps;
+                            console.log(`[CheckpointCycler] Instant increment: ${currentVal} -> ${newVal} (Total: ${total}, Repeats: ${repeats})`);
+                            ciw.value = newVal;
+                            if (ciw.callback) ciw.callback(newVal);
+                        }
+                    }
+                }
+            }
+            
+            return originalQueuePrompt.apply(this, arguments);
+        };
     }
 });
