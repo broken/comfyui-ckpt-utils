@@ -242,7 +242,7 @@ app.registerExtension({
                 
                 var collapseWidgets = function() {
                     if (!self.widgets) return;
-                    var totalH = 44; // Title bar + padding
+                    var totalH = 34; // Tighter title bar + padding
                     
                     var visible = [];
                     var hidden = [];
@@ -255,17 +255,17 @@ app.registerExtension({
                             hidden.push(w);
                         } else {
                             visible.push(w);
-                            // Estimate height for visible widgets: standard is ~24px
                             var h = 24;
                             if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
                             else if (w.computeSize) h = w.computeSize()[1];
-                            totalH += h + 4;
+                            totalH += h + 2; // Tighter 2px margin
                         }
                     });
                     
                     self.widgets = visible.concat(hidden);
-                    self.size[1] = totalH + 6; // Add small footer pad
+                    self.size[1] = totalH + 2; // Tighter 2px footer pad
                 };
+
 
 
                 cleanupInputs();
@@ -418,7 +418,7 @@ app.registerExtension({
                         }
                     }
 
-                    var totalH = 44;
+                    var totalH = 34; // Tighter title bar
                     if (self.widgets) {
                         var visible = [];
                         var hidden = [];
@@ -433,14 +433,15 @@ app.registerExtension({
                                 var h = 24;
                                 if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
                                 else if (w.computeSize) h = w.computeSize()[1];
-                                totalH += h + 4;
+                                totalH += h + 2; // Tighter 2px margin
                             }
                         });
                         self.widgets = visible.concat(hidden);
                     }
-                    self.size[1] = totalH + 6;
+                    self.size[1] = totalH + 2; // Tighter 2px footer
                     app.graph.setDirtyCanvas(true, true);
                 };
+
 
                 purge();
                 setTimeout(purge, 100);
