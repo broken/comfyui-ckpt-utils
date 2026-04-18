@@ -14,15 +14,25 @@ async function fetchMetadata() {
     if (fetchOngoing) return await fetchOngoing;
     
     fetchOngoing = (async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-            const response = await fetch("/comfyui-ckpt-utils/cycler-metadata");
+            console.log("[CheckpointCycler] Fetching metadata from server...");
+            const response = await fetch("/comfyui-ckpt-utils/cycler-metadata", { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!response.ok) {
+                console.warn("[CheckpointCycler] Metadata fetch failed with status:", response.status);
+                return { base_models: [], tags: [], checkpoints: [] };
+            }
             const json = await response.json();
+            console.log("[CheckpointCycler] Metadata received, checkpoints count:", json.checkpoints ? json.checkpoints.length : 0);
             if (!json.error) cyclerMetadata = json;
+            else console.warn("[CheckpointCycler] Metadata JSON error:", json.error);
         } catch (e) {
-            console.error("Failed to fetch cycler metadata", e);
+            console.error("[CheckpointCycler] Failed to fetch cycler metadata:", e.message);
         }
         fetchOngoing = null;
-        return cyclerMetadata || { base_models: [""], tags: [""], checkpoints: [] };
+        return cyclerMetadata || { base_models: [], tags: [], checkpoints: [] };
     })();
     return await fetchOngoing;
 }
@@ -375,6 +385,14 @@ app.registerExtension({
                                 section.appendChild(chipsCont);
                                 container.appendChild(section);
                             });
+                            
+                            // Dynamically update the widget height to match the content
+                            requestAnimationFrame(function() {
+                                var contentH = Math.min(400, Math.max(60, container.scrollHeight + 10));
+                                domW.computeSize = function() { return [self.size[0], contentH]; };
+                                if (self.hasOwnProperty("onNodeCreated")) collapseWidgets();
+                                else purge();
+                            });
                         };
 
                         renderSections();
@@ -385,6 +403,9 @@ app.registerExtension({
                         });
                         domW.computeSize = function() { return [self.size[0], 220]; };
 
+                        // Recalculate size NOW that we've added the DOM widget
+                        if (self.hasOwnProperty("onNodeCreated")) collapseWidgets();
+                        else purge();
                     } catch (err) {
                         console.error("[CheckpointCycler] setupDOMWidget error:", err);
                     }
