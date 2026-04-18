@@ -98,8 +98,25 @@ function syncFromIndex(node, internalOnly) {
         
         const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
         const currentVal = parseInt(ciw.value) || 0;
-        const idx = Math.floor(currentVal / repeats) % matches.length;
+        const totalSteps = matches.length * repeats;
+        
+        let idx = 0;
+        let iteration = 1;
+        
+        if (totalSteps > 0) {
+            const wrappedVal = currentVal % totalSteps;
+            idx = Math.floor(wrappedVal / repeats);
+            iteration = (wrappedVal % repeats) + 1;
+        }
+        
         const targetModel = matches[idx];
+        
+        // Update Status Display
+        const statusW = node.widgets.find(w => w.name === "cycler_status");
+        if (statusW) {
+            statusW.value = `Model ${idx + 1}/${matches.length} | Iter ${iteration}/${repeats}`;
+            if (statusW.inputEl) statusW.inputEl.value = statusW.value;
+        }
         
         if (targetModel && ckptW.value !== targetModel.name) {
             ckptW.value = targetModel.name;
@@ -452,6 +469,14 @@ app.registerExtension({
                     mw.inputEl.readOnly = true;
                     mw.inputEl.style.color = "#4a9eff";
                 }
+
+                // Added iteration display widget
+                this.addWidget("text", "cycler_status", "Initializing...", function() {});
+                const sw = this.widgets.find(function(w) { return w.name === "cycler_status"; });
+                if (sw && sw.inputEl) {
+                    sw.inputEl.readOnly = true;
+                    sw.inputEl.style.color = "#10b981"; // Greenish for active status
+                }
                 
                 const setupDOMWidget = function() {
                     console.log("[CheckpointCycler] setupDOMWidget...");
@@ -645,9 +670,16 @@ app.registerExtension({
                             newVal = (currentVal + 1);
                         } else if (mode === "decrement") {
                             newVal = (currentVal - 1);
-                            if (newVal < 0) newVal = Math.max(0, totalSteps - 1);
                         } else if (mode === "randomize") {
-                            newVal = Math.floor(Math.random() * Math.max(1, totalSteps));
+                            // Smart Randomize: Only pick a new model if the current repeat cycle is finished
+                            const iteration = (currentVal % repeats) + 1;
+                            if (iteration >= repeats) {
+                                // Cycle finished, pick new random model start
+                                newVal = Math.floor(Math.random() * Math.max(1, matches.length)) * repeats;
+                            } else {
+                                // Still repeating current model
+                                newVal = currentVal + 1;
+                            }
                         }
                         
                         // Wrap around for increment/decrement if we have steps
