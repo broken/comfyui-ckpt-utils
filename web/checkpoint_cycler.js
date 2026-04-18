@@ -306,25 +306,6 @@ function getAvailableCounts(node, fieldName) {
 
 app.registerExtension({
     name: "comfyui-ckpt-utils.CheckpointCycler",
-    
-    getCustomWidgets() {
-        const createHiddenDataWidget = (node, inputName, inputData) => {
-            return {
-                widget: node.addWidget(inputData[0], inputName, inputData[1]?.default || "", () => {}, { 
-                    serialize: true, 
-                    computeSize: () => [0, 0] 
-                })
-            };
-        };
-
-        return {
-            CC_BASE_MODELS(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_TAGS_INCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_TAGS_EXCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_FOLDERS_INCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
-            CC_FOLDERS_EXCLUDE(node, inputName, inputData, app) { return createHiddenDataWidget(node, inputName, inputData); },
-        };
-    },
 
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
@@ -379,7 +360,14 @@ app.registerExtension({
                         multiCombos.forEach(wName => {
                             const internalW = this.widgets.find(x => x.name === wName);
                             if (!internalW) return;
-                            internalW.computeSize = () => [0, 0]; // Keep invisible
+                            
+                            // Nuke standard ComfyUI String widget
+                            internalW.type = "hidden";
+                            internalW.computeSize = () => [0, 0];
+                            if (internalW.inputEl) {
+                                internalW.inputEl.remove();
+                                internalW.inputEl = null;
+                            }
                             
                             const section = document.createElement("div");
                             section.className = "cc-section";
@@ -479,7 +467,20 @@ app.registerExtension({
             nodeType.prototype.onConfigure = function() {
                 if (onConfigure) onConfigure.apply(this, arguments);
                 requestAnimationFrame(() => {
-                    const uiWidget = this.widgets.find(w => w.name === "cc_ui");
+                    const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                    if (this.widgets) {
+                        this.widgets.forEach(w => {
+                            if (multiCombos.includes(w.name)) {
+                                w.type = "hidden";
+                                w.computeSize = () => [0, 0];
+                                if (w.inputEl) {
+                                    w.inputEl.remove();
+                                    w.inputEl = null;
+                                }
+                            }
+                        });
+                    }
+                    const uiWidget = this.widgets?.find(w => w.name === "cc_ui");
                     if (uiWidget && uiWidget.options && uiWidget.options.setValue) {
                         uiWidget.options.setValue("");
                     }
