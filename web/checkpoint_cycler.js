@@ -242,29 +242,31 @@ app.registerExtension({
                 
                 var collapseWidgets = function() {
                     if (!self.widgets) return;
+                    var totalH = 44; // Title bar + padding
+                    
+                    var visible = [];
+                    var hidden = [];
+                    
                     self.widgets.forEach(function(w) {
                         if (customInputs.indexOf(w.name) !== -1) {
                             w.type = "hidden";
-                            w.computeSize = function() { return [0, -4]; };
+                            w.draw = function() { return; };
+                            w.computeSize = function() { return [0, 0]; };
+                            hidden.push(w);
+                        } else {
+                            visible.push(w);
+                            // Estimate height for visible widgets: standard is ~24px
+                            var h = 24;
+                            if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
+                            else if (w.computeSize) h = w.computeSize()[1];
+                            totalH += h + 4;
                         }
                     });
                     
-                    // Reorder widgets: move hidden ones to the end to prevent gaps between visible rows
-                    var visible = [];
-                    var hidden = [];
-                    for (var i = 0; i < self.widgets.length; i++) {
-                        var w = self.widgets[i];
-                        if (w.type === "hidden") hidden.push(w);
-                        else visible.push(w);
-                    }
                     self.widgets = visible.concat(hidden);
-                    
-                    // Force LiteGraph to recalculate the node size based on visible widgets only
-                    if (self.computeSize) {
-                        var sz = self.computeSize();
-                        self.setSize([Math.max(self.size[0], sz[0]), sz[1]]);
-                    }
+                    self.size[1] = totalH + 6; // Add small footer pad
                 };
+
 
                 cleanupInputs();
                 collapseWidgets();
@@ -415,26 +417,31 @@ app.registerExtension({
                             if (custom.indexOf(self.inputs[i].name) !== -1) self.removeInput(i);
                         }
                     }
+
+                    var totalH = 44;
                     if (self.widgets) {
                         var visible = [];
                         var hidden = [];
                         self.widgets.forEach(function(w) {
                             if (custom.indexOf(w.name) !== -1) {
                                 w.type = "hidden";
-                                w.computeSize = function() { return [0, -4]; };
+                                w.draw = function() { return; };
+                                w.computeSize = function() { return [0, 0]; };
                                 hidden.push(w);
                             } else {
                                 visible.push(w);
+                                var h = 24;
+                                if (w.name === "cc_ui" && w.computeSize) h = w.computeSize()[1];
+                                else if (w.computeSize) h = w.computeSize()[1];
+                                totalH += h + 4;
                             }
                         });
                         self.widgets = visible.concat(hidden);
                     }
-                    if (self.computeSize) {
-                        var sz = self.computeSize();
-                        self.setSize([Math.max(self.size[0], sz[0]), sz[1]]);
-                    }
+                    self.size[1] = totalH + 6;
                     app.graph.setDirtyCanvas(true, true);
                 };
+
                 purge();
                 setTimeout(purge, 100);
                 
