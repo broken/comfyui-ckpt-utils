@@ -309,17 +309,9 @@ app.registerExtension({
 
     getCustomWidgets() {
         const createHiddenDataWidget = (node, inputName, inputData) => {
-            // Act like a standard ComfyUI text widget but natively suppress the DOM creation
-            const w = {
-                type: inputData[0], // CC_BASE_MODELS
-                name: inputName,
-                value: inputData[1]?.default || "",
-                options: { serialize: true },
-                computeSize: () => [0, 0]
-            };
-            // Manually add it to the litegraph node
-            if (!node.widgets) node.widgets = [];
-            node.widgets.push(w);
+            const w = node.addWidget("text", inputName, inputData[1]?.default || "", () => {}, { serialize: true });
+            w.type = "hidden";
+            w.computeSize = () => [0, 0];
             return { widget: w };
         };
 
