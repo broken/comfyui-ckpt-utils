@@ -202,7 +202,7 @@ app.registerExtension({
                 name: inputName,
                 value: inputData[1] && inputData[1].default ? inputData[1].default : "",
                 options: { serialize: true },
-                computeSize: function() { return [0, 0]; }
+                computeSize: function() { return [0, -4]; }
             };
             if (!node.widgets) node.widgets = [];
             node.widgets.push(w);
@@ -225,7 +225,15 @@ app.registerExtension({
                 console.log("[CheckpointCycler] onNodeCreated...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
-                const self = this;
+                // Aggressively remove input slots that match our custom widgets
+                var self = this;
+                var customInputs = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                if (this.inputs) {
+                    this.inputs = this.inputs.filter(function(input) {
+                        return customInputs.indexOf(input.name) === -1;
+                    });
+                }
+
                 const updateCountDisplay = function() {
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
                     if (mWidget && cyclerMetadata) {
@@ -240,17 +248,17 @@ app.registerExtension({
                         updateCountDisplay();
                         app.graph.setDirtyCanvas(true, true);
                     } else if (mWidget) {
-                        mWidget.value = "Pending database...";
+                        mWidget.value = "Waiting for background scanner...";
                         setTimeout(initialPoll, 2000);
                     }
                 };
                 initialPoll();
 
-                this.addWidget("text", "total_matching_models", "Fetching...", function() {});
+                this.addWidget("text", "total_matching_models", "Connecting to database...", function() {});
                 const mw = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
                 if (mw && mw.inputEl) {
                     mw.inputEl.readOnly = true;
-                    mw.inputEl.style.color = "#ff4444";
+                    mw.inputEl.style.color = "#4a9eff";
                 }
                 
                 const setupDOMWidget = function() {
@@ -366,6 +374,7 @@ app.registerExtension({
                         self.widgets.forEach(function(w) {
                             if (multi.indexOf(w.name) !== -1) {
                                 w.type = "hidden";
+                                w.computeSize = function() { return [0, -4]; };
                                 if (w.inputEl) {
                                     w.inputEl.style.display = "none";
                                     w.inputEl.remove();
@@ -378,6 +387,28 @@ app.registerExtension({
                     if (uiw && uiw.options && uiw.options.setValue) uiw.options.setValue("");
                     app.graph.setDirtyCanvas(true, true);
                 });
+            };
+
+            const onExecuted = nodeType.prototype.onExecuted;
+            nodeType.prototype.onExecuted = function (message) {
+                if (onExecuted) onExecuted.apply(this, arguments);
+
+                if (message.current_index) {
+                    const idxWidget = this.widgets.find(function(w) { return w.name === "current_index"; });
+                    if (idxWidget) idxWidget.value = message.current_index[0];
+                }
+                
+                if (message.total_count) {
+                    const mWidget = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                    if (mWidget) {
+                        mWidget.value = "Available cycle matches: " + message.total_count[0];
+                    }
+                }
+
+                if (message.last_selected_ckpt) {
+                    const ckptWidget = this.widgets.find(function(w) { return w.name === "last_selected_ckpt"; });
+                    if (ckptWidget) ckptWidget.value = message.last_selected_ckpt[0];
+                }
             };
         }
     }
