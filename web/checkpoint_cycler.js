@@ -220,19 +220,29 @@ app.registerExtension({
 
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
+            console.log("[CheckpointCycler] beforeRegisterNodeDef matching Checkpoint Cycler");
+
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
-                console.log("[CheckpointCycler] onNodeCreated...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
                 // Aggressively remove input slots that match our custom widgets
                 var self = this;
                 var customInputs = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                if (this.inputs) {
-                    this.inputs = this.inputs.filter(function(input) {
-                        return customInputs.indexOf(input.name) === -1;
-                    });
-                }
+                
+                var cleanupInputs = function() {
+                    if (!self.inputs) return;
+                    for (var i = self.inputs.length - 1; i >= 0; i--) {
+                        var input = self.inputs[i];
+                        if (input && customInputs.indexOf(input.name) !== -1) {
+                            self.removeInput(i);
+                        }
+                    }
+                };
+                cleanupInputs();
+                setTimeout(cleanupInputs, 10);
+                setTimeout(cleanupInputs, 100);
+
 
                 const updateCountDisplay = function() {
                     const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
@@ -367,25 +377,32 @@ app.registerExtension({
             const onConfigure = nodeType.prototype.onConfigure;
             nodeType.prototype.onConfigure = function() {
                 if (onConfigure) onConfigure.apply(this, arguments);
-                const self = this;
-                requestAnimationFrame(function() {
-                    const multi = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                var self = this;
+                var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+                
+                var purge = function() {
+                    if (self.inputs) {
+                        for (var i = self.inputs.length - 1; i >= 0; i--) {
+                            if (custom.indexOf(self.inputs[i].name) !== -1) self.removeInput(i);
+                        }
+                    }
                     if (self.widgets) {
                         self.widgets.forEach(function(w) {
-                            if (multi.indexOf(w.name) !== -1) {
+                            if (custom.indexOf(w.name) !== -1) {
                                 w.type = "hidden";
                                 w.computeSize = function() { return [0, -4]; };
-                                if (w.inputEl) {
-                                    w.inputEl.style.display = "none";
-                                    w.inputEl.remove();
-                                    w.inputEl = null;
-                                }
                             }
                         });
                     }
+                    app.graph.setDirtyCanvas(true, true);
+                };
+                purge();
+                setTimeout(purge, 100);
+                
+                requestAnimationFrame(function() {
+                    const multi = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
                     const uiw = self.widgets.find(function(w) { return w.name === "cc_ui"; });
                     if (uiw && uiw.options && uiw.options.setValue) uiw.options.setValue("");
-                    app.graph.setDirtyCanvas(true, true);
                 });
             };
 
