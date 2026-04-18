@@ -533,20 +533,20 @@ app.registerExtension({
                             
                             if (maxSteps > 0) {
                                 const currentVal = parseInt(ciw.value) || 0;
-                                const newVal = (currentVal + 1) % maxSteps;
                                 
-                                // Update UI instantly
-                                ciw.value = newVal;
-                                if (ciw.callback) ciw.callback(newVal);
-
-                                // Resolve and Lock for this specific execution
-                                const cycleIdx = Math.floor(newVal / repeats) % matches.length;
+                                // 1. Resolve and Lock using the CURRENT value
+                                const cycleIdx = Math.floor(currentVal / repeats) % matches.length;
                                 const selected = matches[cycleIdx];
                                 if (selected) {
                                     if (lockedNameW) lockedNameW.value = selected.name;
                                     if (lockedTagsW) lockedTagsW.value = selected.tags ? selected.tags.join(", ") : "";
-                                    console.log(`[CheckpointCycler] Execution ${i+1}/${count}: Locked to ${selected.name} (Index: ${newVal})`);
+                                    console.log(`[CheckpointCycler] Execution ${i+1}/${count}: Locked to ${selected.name} (Index: ${currentVal})`);
                                 }
+
+                                // 2. Increment for the NEXT execution
+                                const newVal = (currentVal + 1) % maxSteps;
+                                ciw.value = newVal;
+                                if (ciw.callback) ciw.callback(newVal);
                             }
                         }
                     }
