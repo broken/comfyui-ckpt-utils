@@ -630,13 +630,33 @@ app.registerExtension({
                     if (ciw) {
                         const matches = getFilteredCheckpoints(node);
                         const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
-                        const maxSteps = matches.length * (repeats || 1);
+                        const totalSteps = matches.length * repeats;
                         
-                        if (maxSteps > 0) {
-                            const currentVal = parseInt(ciw.value) || 0;
-                            const newVal = (currentVal + 1) % maxSteps;
-                            
-                            // Setting value and calling callback triggers syncFromIndex(node)
+                        // Find the control widget (ComfyUI auto-creates this when control_after_generate is true)
+                        // It is typically named "current_index_control" or similar
+                        const controlW = node.widgets.find(w => w.name === "current_index_control") || 
+                                         node.widgets.find(w => w.name === "control_after_generate"); // fallback
+                        
+                        const mode = controlW ? controlW.value : "increment";
+                        const currentVal = parseInt(ciw.value) || 0;
+                        let newVal = currentVal;
+
+                        if (mode === "increment") {
+                            newVal = (currentVal + 1);
+                        } else if (mode === "decrement") {
+                            newVal = (currentVal - 1);
+                            if (newVal < 0) newVal = Math.max(0, totalSteps - 1);
+                        } else if (mode === "randomize") {
+                            newVal = Math.floor(Math.random() * Math.max(1, totalSteps));
+                        }
+                        
+                        // Wrap around for increment/decrement if we have steps
+                        if (totalSteps > 0 && (mode === "increment" || mode === "decrement")) {
+                            newVal = newVal % totalSteps;
+                            if (newVal < 0) newVal += totalSteps;
+                        }
+
+                        if (mode !== "fixed" && ciw.value !== newVal) {
                             ciw.value = newVal;
                             if (ciw.callback) ciw.callback(newVal);
                         }

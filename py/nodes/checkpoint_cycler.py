@@ -117,7 +117,7 @@ class CheckpointCyclerCU:
                 "folders_include": ("CC_FOLDERS_INCLUDE", {"default": ""}),
                 "folders_exclude": ("CC_FOLDERS_EXCLUDE", {"default": ""}),
                 "repeats": ("INT", {"default": 1, "min": 1, "max": 9999}),
-                "current_index": ("INT", {"default": 0, "min": 0, "max": 999999}),
+                "current_index": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID",
