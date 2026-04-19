@@ -13,6 +13,7 @@ from aiohttp import web
 from .py.nodes.checkpoint_cycler import CheckpointCyclerCU, get_metadata
 from .py.nodes.tag_parser import TagParserCU  # Brought over from the user's recent modifications
 from .py.nodes.prompt_hasher import PromptHasherCU
+from .py.nodes.prompt_selection import PromptSelectionCU
 
 
 @PromptServer.instance.routes.get("/comfyui-ckpt-utils/cycler-metadata")
@@ -26,7 +27,8 @@ async def fetch_cycler_metadata(request):
 NODE_CLASS_MAPPINGS = {
     CheckpointCyclerCU.NAME: CheckpointCyclerCU,
     TagParserCU.NAME: TagParserCU,
-    PromptHasherCU.NAME: PromptHasherCU
+    PromptHasherCU.NAME: PromptHasherCU,
+    PromptSelectionCU.NAME: PromptSelectionCU
 }
 
 WEB_DIRECTORY = "./web"
