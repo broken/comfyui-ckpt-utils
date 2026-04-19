@@ -84,7 +84,8 @@ async def get_metadata():
                 "name": formatted_name,
                 "base_model": bm,
                 "tags": model_tags,
-                "folder": folder
+                "folder": folder,
+                "favorite": bool(item.get("favorite", False))
             })
                     
         return {
@@ -116,6 +117,7 @@ class CheckpointCyclerCU:
                 "tags_exclude": ("CC_TAGS_EXCLUDE", {"default": ""}),
                 "folders_include": ("CC_FOLDERS_INCLUDE", {"default": ""}),
                 "folders_exclude": ("CC_FOLDERS_EXCLUDE", {"default": ""}),
+                "favorites_only": ("BOOLEAN", {"default": False}),
                 "repeats": ("INT", {"default": 1, "min": 1, "max": 9999}),
                 "current_index": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
             },
@@ -143,7 +145,7 @@ class CheckpointCyclerCU:
         import time
         return time.time()
 
-    def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, repeats, current_index, unique_id=None, last_selected_ckpt="", locked_ckpt_name="", locked_tags=""):
+    def cycle(self, ckpt_name, base_models, tags_include, tags_exclude, folders_include, folders_exclude, favorites_only, repeats, current_index, unique_id=None, last_selected_ckpt="", locked_ckpt_name="", locked_tags=""):
         import asyncio
         
         async def _get_models():
@@ -167,6 +169,9 @@ class CheckpointCyclerCU:
                 if b_models and item_base not in b_models:
                     continue
                 
+                if favorites_only and not item.get("favorite", False):
+                    continue
+
                 model_tags = [str(t).strip().lower() for t in item.get("tags", [])]
                 if inc_t and not all(t in model_tags for t in inc_t):
                     continue

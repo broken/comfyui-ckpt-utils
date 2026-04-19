@@ -50,10 +50,12 @@ function getFilteredCheckpoints(node) {
     const exc_t = String(getVal("tags_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
     const inc_f = String(getVal("folders_include") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
     const exc_f = String(getVal("folders_exclude") || "").toLowerCase().split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+    const favOnly = !!getVal("favorites_only");
 
     let filtered = [];
     for (let i = 0; i < cyclerMetadata.checkpoints.length; i++) {
         const c = cyclerMetadata.checkpoints[i];
+        if (favOnly && !c.favorite) continue;
         if (b_models.length > 0 && b_models.indexOf(c.base_model) === -1) continue;
         
         const hasIncT = inc_t.length === 0 || inc_t.every(function(t) { return c.tags && c.tags.indexOf(t) !== -1; });
@@ -300,7 +302,7 @@ function getAvailableCounts(node, fieldName) {
 
 function syncNodeLayout(node) {
     if (!node || !node.widgets) return;
-    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only"];
     
     // 1. Suppress Inputs (the dots)
     if (node.inputs) {
@@ -489,6 +491,31 @@ app.registerExtension({
 
                         const renderSections = function() {
                             container.innerHTML = "";
+                            
+                            // Top Row: Favorites Toggle
+                            const topRow = document.createElement("div");
+                            topRow.style = "display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;";
+                            
+                            const favLabel = document.createElement("label");
+                            favLabel.style = "display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: #ffd700;";
+                            
+                            const favW = self.widgets.find(w => w.name === "favorites_only");
+                            const favCb = document.createElement("input");
+                            favCb.type = "checkbox";
+                            favCb.checked = !!(favW ? favW.value : false);
+                            favCb.onchange = function(e) {
+                                if (favW) {
+                                    favW.value = e.target.checked;
+                                    if (favW.callback) favW.callback(favW.value);
+                                }
+                                updateAll();
+                            };
+                            
+                            favLabel.appendChild(favCb);
+                            favLabel.appendChild(document.createTextNode("⭐ Favorites Only"));
+                            topRow.appendChild(favLabel);
+                            container.appendChild(topRow);
+
                             multiCombos.forEach(function(wName) {
                                 const internalW = self.widgets.find(function(x) { return x.name === wName; });
                                 if (!internalW) return;
