@@ -3,9 +3,9 @@ import { app } from "../../scripts/app.js";
 /**
  * Prompt Selection Node Extension
  * Provides a dynamic UI for managing multiple positive/negative prompt pairs.
+ * Includes seed-style index controls and instant selection syncing.
  */
 
-// Premium styles for the Prompt Selection UI
 const styles = `
     .ps-container {
         display: flex;
@@ -19,12 +19,7 @@ const styles = `
         color: #eee;
         overflow-y: auto;
         max-height: 500px;
-        scrollbar-width: thin;
-        scrollbar-color: #444 transparent;
     }
-    .ps-container::-webkit-scrollbar { width: 6px; }
-    .ps-container::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
-    
     .ps-pair {
         background: rgba(45, 50, 60, 0.6);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -32,7 +27,6 @@ const styles = `
         padding: 12px;
         position: relative;
         transition: transform 0.2s, background 0.2s;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .ps-pair:hover {
         background: rgba(55, 60, 75, 0.8);
@@ -46,7 +40,6 @@ const styles = `
         font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
         color: #88c0d0;
     }
     .ps-remove-btn {
@@ -57,13 +50,8 @@ const styles = `
         padding: 3px 8px;
         cursor: pointer;
         font-size: 10px;
-        font-weight: bold;
-        transition: all 0.2s;
     }
-    .ps-remove-btn:hover {
-        background: #bf616a;
-        color: #fff;
-    }
+    .ps-remove-btn:hover { background: #bf616a; color: #fff; }
     .ps-textarea {
         width: 100%;
         min-height: 45px;
@@ -77,12 +65,9 @@ const styles = `
         resize: vertical;
         outline: none;
         box-sizing: border-box;
-        transition: border-color 0.2s;
     }
-    .ps-textarea:focus { border-color: #81a1c1; background: rgba(0,0,0,0.5); }
     .ps-textarea.ps-neg { border-left: 3px solid #bf616a; }
     .ps-textarea.ps-pos { border-left: 3px solid #a3be8c; }
-    
     .ps-add-btn {
         background: linear-gradient(135deg, #5e81ac 0%, #81a1c1 100%);
         color: #fff;
@@ -93,15 +78,7 @@ const styles = `
         font-weight: 700;
         font-size: 12px;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        box-shadow: 0 4px 15px rgba(94, 129, 172, 0.3);
-        transition: all 0.2s;
     }
-    .ps-add-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(94, 129, 172, 0.4);
-    }
-    .ps-add-btn:active { transform: translateY(0); }
 `;
 
 function injectStyles() {
@@ -110,6 +87,37 @@ function injectStyles() {
         style.id = "ps-node-styles";
         style.textContent = styles;
         document.head.appendChild(style);
+    }
+}
+
+// Helper to sync selection widgets from the current index
+function syncSelection(node) {
+    const promptDataW = node.widgets.find(w => w.name === "prompt_data");
+    const indexW = node.widgets.find(w => w.name === "index");
+    const posW = node.widgets.find(w => w.name === "selected_positive");
+    const negW = node.widgets.find(w => w.name === "selected_negative");
+
+    if (!promptDataW || !indexW) return;
+
+    let pairs = [];
+    try { pairs = JSON.parse(promptDataW.value || "[]"); } catch (e) { pairs = []; }
+
+    if (pairs.length > 0) {
+        const idx = parseInt(indexW.value) || 0;
+        const actualIdx = Math.max(0, Math.min(idx, pairs.length - 1));
+        const pair = pairs[actualIdx];
+        
+        if (posW) {
+            posW.value = pair.pos || "";
+            if (posW.inputEl) posW.inputEl.value = posW.value;
+        }
+        if (negW) {
+            negW.value = pair.neg || "";
+            if (negW.inputEl) negW.inputEl.value = negW.value;
+        }
+    } else {
+        if (posW) posW.value = "";
+        if (negW) negW.value = "";
     }
 }
 
@@ -125,11 +133,19 @@ app.registerExtension({
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 const self = this;
 
-                // 1. Find and hide internal widgets
                 const promptDataWidget = this.widgets.find(w => w.name === "prompt_data");
                 if (promptDataWidget) {
                     promptDataWidget.type = "hidden";
                     promptDataWidget.computeSize = () => [0, 0];
+                }
+
+                const indexWidget = this.widgets.find(w => w.name === "index");
+                if (indexWidget) {
+                    const oldCb = indexWidget.callback;
+                    indexWidget.callback = function() {
+                        if (oldCb) oldCb.apply(this, arguments);
+                        syncSelection(self);
+                    };
                 }
 
                 const posWidget = this.widgets.find(w => w.name === "selected_positive");
@@ -141,15 +157,12 @@ app.registerExtension({
                         if (w.inputEl) {
                             w.inputEl.readOnly = true;
                             w.inputEl.style.opacity = "0.7";
-                            w.inputEl.style.background = "rgba(0,0,0,0.2)";
                         }
                     }
                 });
 
-                // 2. Create the DOM container for dynamic pairs
                 const container = document.createElement("div");
                 container.className = "ps-container";
-                // Prevent graph interactions while typing
                 container.addEventListener("wheel", (e) => e.stopPropagation());
                 container.addEventListener("pointerdown", (e) => e.stopPropagation());
 
@@ -161,19 +174,14 @@ app.registerExtension({
                         pairs.push({ pos, neg });
                     });
                     promptDataWidget.value = JSON.stringify(pairs);
+                    syncSelection(self); // Sync to widgets immediately
                 };
 
                 const renderPairs = () => {
-                    // Save scroll position
                     const scrollTop = container.scrollTop;
                     container.innerHTML = "";
-                    
                     let pairs = [];
-                    try {
-                        pairs = JSON.parse(promptDataWidget.value || "[]");
-                    } catch (e) {
-                        pairs = [];
-                    }
+                    try { pairs = JSON.parse(promptDataWidget.value || "[]"); } catch (e) { pairs = []; }
 
                     pairs.forEach((pair, idx) => {
                         const pairEl = document.createElement("div");
@@ -181,7 +189,7 @@ app.registerExtension({
                         pairEl.innerHTML = `
                             <div class="ps-pair-header">
                                 <span>Pair #${idx}</span>
-                                <button class="ps-remove-btn" title="Remove this pair">Remove</button>
+                                <button class="ps-remove-btn">Remove</button>
                             </div>
                             <textarea class="ps-textarea ps-pos" placeholder="Positive Prompt...">${pair.pos || ""}</textarea>
                             <textarea class="ps-textarea ps-neg" placeholder="Negative Prompt...">${pair.neg || ""}</textarea>
@@ -189,19 +197,13 @@ app.registerExtension({
 
                         pairEl.querySelector(".ps-remove-btn").onclick = (e) => {
                             e.preventDefault();
-                            pairEl.style.opacity = "0";
-                            pairEl.style.transform = "scale(0.9)";
-                            setTimeout(() => {
-                                pairEl.remove();
-                                updateData();
-                                renderPairs();
-                            }, 150);
+                            pairEl.remove();
+                            updateData();
+                            renderPairs();
                         };
 
                         pairEl.querySelectorAll("textarea").forEach(ta => {
-                            ta.oninput = () => {
-                                updateData();
-                            };
+                            ta.oninput = () => updateData();
                         });
 
                         container.appendChild(pairEl);
@@ -216,26 +218,19 @@ app.registerExtension({
                         current.push({ pos: "", neg: "" });
                         promptDataWidget.value = JSON.stringify(current);
                         renderPairs();
-                        // Scroll to bottom
-                        setTimeout(() => container.scrollTop = container.scrollHeight, 10);
                     };
                     container.appendChild(addBtn);
-
-                    // Restore scroll
                     container.scrollTop = scrollTop;
 
-                    // Automatically adjust node height
                     requestAnimationFrame(() => {
                         const contentH = Math.min(600, Math.max(100, container.scrollHeight + 40));
                         if (uiW) {
                             uiW.computeSize = () => [self.size[0], contentH];
-                            // Force resize using LiteGraph method if available
                             if (self.setSize) self.setSize([self.size[0], self.computeSize()[1]]);
                         }
                     });
                 };
 
-                // Add the special DOM widget
                 const uiW = this.addDOMWidget("ps_ui", "PS_UI", container, {
                     serialize: false,
                     getValue() { return ""; },
@@ -243,23 +238,7 @@ app.registerExtension({
                 });
 
                 renderPairs();
-
-                // Override onExecuted to show choice
-                const onExecuted = nodeType.prototype.onExecuted;
-                this.onExecuted = function(message) {
-                    if (onExecuted) onExecuted.apply(this, arguments);
-                    if (message.selection_info) {
-                        const { positive, negative } = message.selection_info;
-                        if (posWidget) {
-                            posWidget.value = positive;
-                            if (posWidget.inputEl) posWidget.inputEl.value = positive;
-                        }
-                        if (negWidget) {
-                            negWidget.value = negative;
-                            if (negWidget.inputEl) negWidget.inputEl.value = negative;
-                        }
-                    }
-                };
+                syncSelection(this);
 
                 return r;
             };
@@ -268,10 +247,66 @@ app.registerExtension({
             nodeType.prototype.onConfigure = function() {
                 if (onConfigure) onConfigure.apply(this, arguments);
                 const ui = this.widgets.find(w => w.name === "ps_ui");
-                if (ui && ui.options && ui.options.setValue) {
-                    ui.options.setValue("");
-                }
+                if (ui && ui.options && ui.options.setValue) ui.options.setValue("");
+                syncSelection(this);
             };
         }
+    },
+
+    setup() {
+        const originalQueuePrompt = app.queuePrompt;
+        app.queuePrompt = async function(number, batch_count) {
+            const count = Math.max(1, parseInt(batch_count) || 1);
+            const promptNodes = app.graph.findNodesByType("Prompt Selection");
+
+            for (let i = 0; i < count; i++) {
+                // 1. Capture snapshots and ensure selection is synced BEFORE queuing
+                const snapshots = promptNodes.map(node => {
+                    const indexW = node.widgets.find(w => w.name === "index");
+                    const controlW = node.widgets.find(w => w.name === "control_after_generate");
+                    const promptDataW = node.widgets.find(w => w.name === "prompt_data");
+                    
+                    let pairCount = 0;
+                    try { pairCount = JSON.parse(promptDataW.value || "[]").length; } catch(e) {}
+
+                    // IMPORTANT: Sync UI to index before the prompt is captured by ComfyUI
+                    syncSelection(node);
+
+                    return {
+                        node,
+                        indexW,
+                        startVal: indexW ? parseInt(indexW.value) || 0 : 0,
+                        mode: controlW ? controlW.value : "increment",
+                        pairCount
+                    };
+                });
+
+                // 2. Queue the prompt with the CURRENT synced values
+                const result = await originalQueuePrompt.call(this, number, 1);
+                if (i === count - 1) var lastResult = result;
+
+                // 3. Increment/Update index for the NEXT run
+                for (const snap of snapshots) {
+                    const { node, indexW, startVal, mode, pairCount } = snap;
+                    if (!indexW || mode === "fixed" || pairCount === 0) continue;
+
+                    let newVal = startVal;
+                    if (mode === "increment") newVal = startVal + 1;
+                    else if (mode === "decrement") newVal = startVal - 1;
+                    else if (mode === "randomize") newVal = Math.floor(Math.random() * pairCount);
+
+                    if (mode === "increment" || mode === "decrement") {
+                        newVal = newVal % pairCount;
+                        if (newVal < 0) newVal += pairCount;
+                    }
+
+                    if (indexW.value !== newVal) {
+                        indexW.value = newVal;
+                        if (indexW.callback) indexW.callback(newVal); // Triggers syncSelection for NEXT run
+                    }
+                }
+            }
+            return lastResult;
+        };
     }
 });

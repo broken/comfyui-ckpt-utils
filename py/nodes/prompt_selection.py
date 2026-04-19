@@ -13,7 +13,7 @@ class PromptSelectionCU:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "index": ("INT", {"default": 0, "min": 0, "max": 999}),
+                "index": ("INT", {"default": 0, "min": 0, "max": 999, "control_after_generate": True}),
                 # prompt_data stores the JSON list of pairs: [{"pos": "...", "neg": "..."}, ...]
                 "prompt_data": ("STRING", {"default": "[]", "multiline": True}),
                 # These are updated on execution and displayed in the UI as read-only widgets
