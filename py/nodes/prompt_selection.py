@@ -14,8 +14,8 @@ class PromptSelectionCU:
         return {
             "required": {
                 "index": ("INT", {"default": 0, "min": 0, "max": 999, "control_after_generate": True}),
-                # prompt_data stores the JSON list of pairs: [{"pos": "...", "neg": "..."}, ...]
-                "prompt_data": ("STRING", {"default": "[]", "multiline": True}),
+                # PS_DATA is a custom type handled in JS to create a hidden widget
+                "prompt_data": ("PS_DATA", {"default": "[]"}),
                 # These are updated on execution and displayed in the UI as read-only widgets
                 "selected_positive": ("STRING", {"default": "", "multiline": True}),
                 "selected_negative": ("STRING", {"default": "", "multiline": True}),

@@ -124,6 +124,24 @@ function syncSelection(node) {
 app.registerExtension({
     name: "comfyui-ckpt-utils.PromptSelection",
 
+    getCustomWidgets() {
+        return {
+            PS_DATA(node, inputName, inputData) {
+                const w = {
+                    type: "hidden",
+                    name: inputName,
+                    value: inputData[1] && inputData[1].default ? inputData[1].default : "[]",
+                    options: { serialize: true },
+                    draw: () => {},
+                    computeSize: () => [0, 0]
+                };
+                if (!node.widgets) node.widgets = [];
+                node.widgets.push(w);
+                return { widget: w };
+            }
+        };
+    },
+
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Prompt Selection") {
             injectStyles();
@@ -133,12 +151,7 @@ app.registerExtension({
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 const self = this;
 
-                const promptDataWidget = this.widgets.find(w => w.name === "prompt_data");
-                if (promptDataWidget) {
-                    promptDataWidget.type = "hidden";
-                    promptDataWidget.computeSize = () => [0, 0];
-                }
-
+                // Index callback for syncing
                 const indexWidget = this.widgets.find(w => w.name === "index");
                 if (indexWidget) {
                     const oldCb = indexWidget.callback;
@@ -148,6 +161,7 @@ app.registerExtension({
                     };
                 }
 
+                // Make selection outputs read-only
                 const posWidget = this.widgets.find(w => w.name === "selected_positive");
                 const negWidget = this.widgets.find(w => w.name === "selected_negative");
                 
@@ -161,12 +175,16 @@ app.registerExtension({
                     }
                 });
 
+                // UI Container
                 const container = document.createElement("div");
                 container.className = "ps-container";
                 container.addEventListener("wheel", (e) => e.stopPropagation());
                 container.addEventListener("pointerdown", (e) => e.stopPropagation());
 
                 const updateData = () => {
+                    const promptDataWidget = self.widgets.find(w => w.name === "prompt_data");
+                    if (!promptDataWidget) return;
+
                     const pairs = [];
                     container.querySelectorAll(".ps-pair").forEach(pairEl => {
                         const pos = pairEl.querySelector(".ps-pos").value;
@@ -174,10 +192,13 @@ app.registerExtension({
                         pairs.push({ pos, neg });
                     });
                     promptDataWidget.value = JSON.stringify(pairs);
-                    syncSelection(self); // Sync to widgets immediately
+                    syncSelection(self); 
                 };
 
                 const renderPairs = () => {
+                    const promptDataWidget = self.widgets.find(w => w.name === "prompt_data");
+                    if (!promptDataWidget) return;
+
                     const scrollTop = container.scrollTop;
                     container.innerHTML = "";
                     let pairs = [];
@@ -260,7 +281,6 @@ app.registerExtension({
             const promptNodes = app.graph.findNodesByType("Prompt Selection");
 
             for (let i = 0; i < count; i++) {
-                // 1. Capture snapshots and ensure selection is synced BEFORE queuing
                 const snapshots = promptNodes.map(node => {
                     const indexW = node.widgets.find(w => w.name === "index");
                     const controlW = node.widgets.find(w => w.name === "control_after_generate");
@@ -269,7 +289,6 @@ app.registerExtension({
                     let pairCount = 0;
                     try { pairCount = JSON.parse(promptDataW.value || "[]").length; } catch(e) {}
 
-                    // IMPORTANT: Sync UI to index before the prompt is captured by ComfyUI
                     syncSelection(node);
 
                     return {
@@ -281,11 +300,9 @@ app.registerExtension({
                     };
                 });
 
-                // 2. Queue the prompt with the CURRENT synced values
                 const result = await originalQueuePrompt.call(this, number, 1);
                 if (i === count - 1) var lastResult = result;
 
-                // 3. Increment/Update index for the NEXT run
                 for (const snap of snapshots) {
                     const { node, indexW, startVal, mode, pairCount } = snap;
                     if (!indexW || mode === "fixed" || pairCount === 0) continue;
@@ -302,7 +319,7 @@ app.registerExtension({
 
                     if (indexW.value !== newVal) {
                         indexW.value = newVal;
-                        if (indexW.callback) indexW.callback(newVal); // Triggers syncSelection for NEXT run
+                        if (indexW.callback) indexW.callback(newVal);
                     }
                 }
             }
