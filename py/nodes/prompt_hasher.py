@@ -1,7 +1,7 @@
 import hashlib
 
 class PromptHasherCU:
-    """Generates a deterministic 9-character alphanumeric hash from a prompt string."""
+    """Generates a deterministic 7-character alphanumeric hash from a prompt string."""
 
     NAME = "Prompt to Prefix"
     CATEGORY = "Lora Manager/utils"
@@ -27,14 +27,13 @@ class PromptHasherCU:
         hash_object = hashlib.sha256(prompt_str.encode('utf-8'))
         hash_int = int(hash_object.hexdigest(), 16)
         
-        # Take modulo 36^9 to get a value within the range of 9 base-36 characters
-        # 36^9 = 101,559,956,668,416 (approx 10^14)
-        num = hash_int % (36**9)
+        # Take modulo 36^7 to get a value within the range of 7 base-36 characters
+        num = hash_int % (36**7)
         
         # Convert to base 36 (0-9, a-z)
         chars = "0123456789abcdefghijklmnopqrstuvwxyz"
         base36 = ""
-        for _ in range(9):
+        for _ in range(7):
             base36 = chars[num % 36] + base36
             num //= 36
             
