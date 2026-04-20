@@ -54,8 +54,9 @@ async def get_lora_metadata():
         
         loras = []
         for item in cache.raw_data:
-            # For loras, sub_type is usually 'lora'
-            if item.get("sub_type") not in ("lora", "lycoris"):
+            # For loras, sub_type is usually 'lora', but might be missing in older caches or if not set in LoraMetadata
+            st = item.get("sub_type", "lora")
+            if st not in ("lora", "lycoris"):
                 continue
                 
             file_path = item.get("file_path", "")
@@ -163,7 +164,8 @@ class LoraCyclerCU:
             
             filtered = []
             for item in cache.raw_data:
-                if item.get("sub_type") not in ("lora", "lycoris"):
+                st = item.get("sub_type", "lora")
+                if st not in ("lora", "lycoris"):
                     continue
                     
                 item_base = str(item.get("base_model", "Unknown"))
