@@ -7,18 +7,35 @@ import { app } from "../../scripts/app.js";
  */
 
 const styles = `
-    .ps-container {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding: 12px;
-        background: rgba(20, 20, 25, 0.85);
+        overflow-y: scroll;
+        height: 100%;
+        min-height: 150px;
+        box-sizing: border-box;
+    }
+    .ps-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .ps-container::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
         border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: #eee;
-        overflow-y: auto;
-        max-height: 500px;
+    }
+    .ps-container::-webkit-scrollbar-thumb {
+        background: #5e81ac;
+        border-radius: 10px;
+    }
+    .ps-container::-webkit-scrollbar-thumb:hover {
+        background: #81a1c1;
+    }
+    .ps-container textarea:focus {
+        border-color: #88c0d0;
+        box-shadow: 0 0 0 2px rgba(136, 192, 208, 0.2);
+    }
+    .ps-add-btn:hover {
+        background: linear-gradient(135deg, #81a1c1 0%, #88c0d0 100%);
+        transform: translateY(-1px);
+    }
+    .ps-add-btn:active {
+        transform: translateY(0);
     }
     .ps-pair {
         background: rgba(45, 50, 60, 0.6);
@@ -178,8 +195,19 @@ app.registerExtension({
                 // UI Container
                 const container = document.createElement("div");
                 container.className = "ps-container";
-                container.addEventListener("wheel", (e) => e.stopPropagation());
-                container.addEventListener("pointerdown", (e) => e.stopPropagation());
+                
+                // Stop events from reaching ComfyUI canvas
+                container.addEventListener("wheel", (e) => {
+                    e.stopPropagation();
+                }, { passive: false });
+                
+                container.addEventListener("pointerdown", (e) => {
+                    e.stopPropagation();
+                });
+
+                container.addEventListener("mousedown", (e) => {
+                    e.stopPropagation();
+                });
 
                 const updateData = () => {
                     const promptDataWidget = self.widgets.find(w => w.name === "prompt_data");
@@ -244,10 +272,14 @@ app.registerExtension({
                     container.scrollTop = scrollTop;
 
                     requestAnimationFrame(() => {
-                        const contentH = Math.min(600, Math.max(100, container.scrollHeight + 40));
+                        const contentH = Math.min(800, Math.max(200, container.scrollHeight + 50));
                         if (uiW) {
                             uiW.computeSize = () => [self.size[0], contentH];
-                            if (self.setSize) self.setSize([self.size[0], self.computeSize()[1]]);
+                            // If we're small or just created, snap to content. 
+                            // Otherwise, allow the user's manual resize to persist.
+                            if (!self.size || self.size[1] < contentH) {
+                                if (self.setSize) self.setSize([self.size[0], Math.max(self.size[1] || 0, contentH)]);
+                            }
                         }
                     });
                 };
