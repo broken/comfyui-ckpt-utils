@@ -11,6 +11,7 @@ if lora_manager_path not in sys.path:
 from server import PromptServer
 from aiohttp import web
 from .py.nodes.checkpoint_cycler import CheckpointCyclerCU, get_metadata
+from .py.nodes.lora_cycler import LoraCyclerCU, get_lora_metadata
 from .py.nodes.tag_parser import TagParserCU  # Brought over from the user's recent modifications
 from .py.nodes.prompt_hasher import PromptHasherCU
 from .py.nodes.prompt_selection import PromptSelectionCU
@@ -24,8 +25,17 @@ async def fetch_cycler_metadata(request):
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
+@PromptServer.instance.routes.get("/comfyui-ckpt-utils/lora-cycler-metadata")
+async def fetch_lora_cycler_metadata(request):
+    try:
+        data = await get_lora_metadata()
+        return web.json_response(data)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
 NODE_CLASS_MAPPINGS = {
     CheckpointCyclerCU.NAME: CheckpointCyclerCU,
+    LoraCyclerCU.NAME: LoraCyclerCU,
     TagParserCU.NAME: TagParserCU,
     PromptHasherCU.NAME: PromptHasherCU,
     PromptSelectionCU.NAME: PromptSelectionCU
