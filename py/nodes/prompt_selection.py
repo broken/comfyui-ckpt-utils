@@ -19,7 +19,6 @@ class PromptSelectionCU:
                 # These are updated on execution and displayed in the UI as read-only widgets
                 "selected_positive": ("STRING", {"default": "", "multiline": True}),
                 "selected_negative": ("STRING", {"default": "", "multiline": True}),
-                "total_count": ("INT", {"default": 0}),
             }
         }
 
@@ -28,7 +27,7 @@ class PromptSelectionCU:
     FUNCTION = "select"
     OUTPUT_NODE = True 
 
-    def select(self, index, prompt_data, selected_positive="", selected_negative="", total_count=0):
+    def select(self, index, prompt_data, selected_positive="", selected_negative=""):
         try:
             # Handle potential escaping or empty strings
             if not prompt_data or prompt_data.strip() == "":
