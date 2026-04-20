@@ -310,7 +310,7 @@ function getAvailableCounts(node, fieldName) {
 
 function syncNodeLayout(node) {
     if (!node || !node.widgets) return;
-    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only"];
+    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only", "current_index_control"];
     
     // 1. Suppress Inputs (the dots)
     if (node.inputs) {
@@ -323,6 +323,7 @@ function syncNodeLayout(node) {
     node.widgets.forEach(function(w) {
         if (custom.indexOf(w.name) !== -1) {
             w.type = "hidden";
+            w.hidden = true;
             w.draw = function() { return; };
             w.computeSize = function() { return [0, 0]; };
             
@@ -394,9 +395,11 @@ app.registerExtension({
                 this.onComputeSize = function() {
                     var h = 34; // Header
                     var currentY = 30;
+                    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only", "current_index_control"];
                     if (this.widgets) {
                         this.widgets.forEach(function(w) {
-                            if (w.type !== "hidden") {
+                            const isHidden = w.type === "hidden" || w.hidden || custom.indexOf(w.name) !== -1;
+                            if (!isHidden) {
                                 var wh = 24;
                                 if (w.computeSize) wh = w.computeSize()[1];
                                 w.y = currentY;
@@ -405,6 +408,7 @@ app.registerExtension({
                             } else {
                                 // Put hidden widgets way off screen so they don't capture clicks
                                 w.y = -100;
+                                w.hidden = true;
                             }
                         });
                     }
