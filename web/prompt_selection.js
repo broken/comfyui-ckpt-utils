@@ -305,18 +305,35 @@ app.registerExtension({
 
                 for (const snap of snapshots) {
                     const { node, indexW, startVal, mode, pairCount } = snap;
-                    if (!indexW || mode === "fixed" || pairCount === 0) continue;
+                    if (!indexW || pairCount === 0) continue;
+
+                    let normalizedMode = "increment";
+                    if (mode) {
+                        const v = String(mode).toLowerCase();
+                        if (v === "randomize" || v === "random") normalizedMode = "randomize";
+                        else if (v === "decrement") normalizedMode = "decrement";
+                        else if (v === "fixed") normalizedMode = "fixed";
+                        else if (v === "increment") normalizedMode = "increment";
+                    }
+
+                    console.log(`[PromptSelection] Node snapshot: val=${startVal}, mode=${normalizedMode}, pairCount=${pairCount}`);
+
+                    if (normalizedMode === "fixed") continue;
 
                     let newVal = startVal;
-                    if (mode === "increment") newVal = startVal + 1;
-                    else if (mode === "decrement") newVal = startVal - 1;
-                    else if (mode === "randomize") newVal = Math.floor(Math.random() * pairCount);
+                    if (normalizedMode === "increment") newVal = startVal + 1;
+                    else if (normalizedMode === "decrement") newVal = startVal - 1;
+                    else if (normalizedMode === "randomize") {
+                        newVal = Math.floor(Math.random() * pairCount);
+                        console.log(`[PromptSelection] Randomizing: new index ${newVal}`);
+                    }
 
-                    if (mode === "increment" || mode === "decrement") {
+                    if (normalizedMode === "increment" || normalizedMode === "decrement") {
                         newVal = newVal % pairCount;
                         if (newVal < 0) newVal += pairCount;
                     }
 
+                    console.log(`[PromptSelection] Updating index: ${startVal} -> ${newVal}`);
                     if (indexW.value !== newVal) {
                         indexW.value = newVal;
                         if (indexW.callback) indexW.callback(newVal);

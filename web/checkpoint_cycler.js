@@ -310,7 +310,7 @@ function getAvailableCounts(node, fieldName) {
 
 function syncNodeLayout(node) {
     if (!node || !node.widgets) return;
-    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only", "current_index_control"];
+    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only"];
     
     // 1. Suppress Inputs (the dots)
     if (node.inputs) {
@@ -395,7 +395,7 @@ app.registerExtension({
                 this.onComputeSize = function() {
                     var h = 34; // Header
                     var currentY = 30;
-                    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only", "current_index_control"];
+                    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only"];
                     if (this.widgets) {
                         this.widgets.forEach(function(w) {
                             const isHidden = w.type === "hidden" || w.hidden || custom.indexOf(w.name) !== -1;
@@ -713,12 +713,24 @@ app.registerExtension({
                     const repeatsW = node.widgets.find(w => w.name === "repeats");
                     const controlW = node.widgets.find(w => w.name === "current_index_control") || 
                                      node.widgets.find(w => w.name === "control_after_generate");
+                    
+                    let mode = "increment";
+                    if (controlW && controlW.value) {
+                        const v = String(controlW.value).toLowerCase();
+                        if (v === "randomize" || v === "random") mode = "randomize";
+                        else if (v === "decrement") mode = "decrement";
+                        else if (v === "fixed") mode = "fixed";
+                        else if (v === "increment") mode = "increment";
+                    }
+
+                    console.log(`[CheckpointCycler] Node snapshot: val=${ciw.value}, mode=${mode}, repeats=${repeatsW ? repeatsW.value : 1}`);
+
                     return {
                         node,
                         ciw,
                         startVal: ciw ? parseInt(ciw.value) || 0 : 0,
                         repeats: repeatsW ? parseInt(repeatsW.value) || 1 : 1,
-                        mode: controlW ? controlW.value : "increment"
+                        mode
                     };
                 });
 
@@ -744,9 +756,11 @@ app.registerExtension({
                         if (iteration >= repeats) {
                             // Cycle finished, pick new random model start
                             newVal = Math.floor(Math.random() * Math.max(1, matches.length)) * repeats;
+                            console.log(`[CheckpointCycler] Randomizing: new model index ${newVal / repeats}`);
                         } else {
                             // Still repeating current model
                             newVal = startVal + 1;
+                            console.log(`[CheckpointCycler] Randomize iteration: ${iteration + 1}/${repeats}`);
                         }
                     }
                     
@@ -757,8 +771,7 @@ app.registerExtension({
                     }
 
                     if (mode !== "fixed") {
-                        // Even if ciw.value is already newVal (thanks to ComfyUI's native post-queue increment),
-                        // we explicitly set it or trigger the callback to ensure ckpt_name and UI stay in sync.
+                        console.log(`[CheckpointCycler] Updating index: ${startVal} -> ${newVal}`);
                         if (ciw.value !== newVal) {
                             ciw.value = newVal;
                         }
