@@ -132,7 +132,7 @@ class LoraCyclerCU:
             }
         }
 
-    RETURN_TYPES = ("LORA_STACK", "STRING", "STRING", "INT")
+    RETURN_TYPES = ("LORA_STACK", "*", "STRING", "INT")
     RETURN_NAMES = ("LORA_STACK", "LORA_NAME", "TAGS", "TOTAL_LORAS")
     FUNCTION = "cycle"
     OUTPUT_NODE = True
