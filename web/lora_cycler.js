@@ -204,6 +204,14 @@ const styles = ".lm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; b
 ".cc-chip-exclude { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #ef4444; } " +
 ".cc-chip-count { opacity: 0.6; font-size: 10px; margin-left: 4px; } " +
 ".cc-empty { font-size: 10px; opacity: 0.3; font-style: italic; width: 100%; text-align: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px; } " +
+'.cc-switch { position: relative; display: inline-block; width: 28px; height: 16px; flex-shrink: 0; } ' +
+'.cc-switch input { opacity: 0; width: 0; height: 0; } ' +
+'.cc-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .2s; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); } ' +
+'.cc-slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 2px; bottom: 2px; background-color: #999; transition: .2s; border-radius: 50%; } ' +
+'input:checked + .cc-slider { background-color: #4299e1; } ' +
+'input:checked + .cc-slider:before { transform: translateX(12px); background-color: #fff; } ' +
+'.cc-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; margin-bottom: 6px; } ' +
+'.cc-toggle-label { font-size: 11px; font-weight: 500; color: #ccc; cursor: pointer; user-select: none; } ' +
 '[data-widget-name="base_models"], [data-widget-name="tags_include"], [data-widget-name="tags_exclude"], [data-widget-name="folders_include"], [data-widget-name="folders_exclude"] { display: none !important; visibility: hidden !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }';
 
 function injectStyles() {
@@ -495,52 +503,64 @@ app.registerExtension({
 
                         const renderSections = function() {
                             container.innerHTML = "";
+
+                            const createSwitchRow = (labelHtml, initialValue, onToggle) => {
+                                const row = document.createElement("div");
+                                row.className = "cc-toggle-row";
+                                
+                                const label = document.createElement("label");
+                                label.className = "cc-toggle-label";
+                                label.innerHTML = labelHtml;
+                                
+                                const sw = document.createElement("label");
+                                sw.className = "cc-switch";
+                                const cb = document.createElement("input");
+                                cb.type = "checkbox";
+                                cb.checked = initialValue;
+                                cb.onchange = (e) => onToggle(e.target.checked);
+                                
+                                const slider = document.createElement("span");
+                                slider.className = "cc-slider";
+                                
+                                sw.appendChild(cb);
+                                sw.appendChild(slider);
+                                row.appendChild(label);
+                                row.appendChild(sw);
+                                
+                                label.onclick = (e) => {
+                                    if (e.target !== cb) {
+                                        cb.checked = !cb.checked;
+                                        onToggle(cb.checked);
+                                    }
+                                };
+                                return row;
+                            };
                             
                             // Top Row: Favorites Toggle and No Lora Toggle
-                            const topRow = document.createElement("div");
-                            topRow.style = "display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px; gap: 12px;";
+                            const topCont = document.createElement("div");
+                            topCont.style = "display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;";
                             
                             // Favorites
-                            const favLabel = document.createElement("label");
-                            favLabel.style = "display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 11px; font-weight: 600; color: #ffd700;";
-                            
                             const favW = self.widgets.find(w => w.name === "favorites_only");
-                            const favCb = document.createElement("input");
-                            favCb.type = "checkbox";
-                            favCb.checked = !!(favW ? favW.value : false);
-                            favCb.onchange = function(e) {
+                            topCont.appendChild(createSwitchRow("Favorites Only", !!(favW ? favW.value : false), (val) => {
                                 if (favW) {
-                                    favW.value = e.target.checked;
-                                    if (favW.callback) favW.callback(favW.value);
+                                    favW.value = val;
+                                    if (favW.callback) favW.callback(val);
                                 }
                                 updateAll();
-                            };
-                            
-                            favLabel.appendChild(favCb);
-                            favLabel.appendChild(document.createTextNode("⭐ Favs"));
-                            topRow.appendChild(favLabel);
+                            }));
 
                             // No Lora
-                            const noneLabel = document.createElement("label");
-                            noneLabel.style = "display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 11px; font-weight: 600; color: #999;";
-                            
                             const noneW = self.widgets.find(w => w.name === "include_no_lora");
-                            const noneCb = document.createElement("input");
-                            noneCb.type = "checkbox";
-                            noneCb.checked = !!(noneW ? noneW.value : true);
-                            noneCb.onchange = function(e) {
+                            topCont.appendChild(createSwitchRow('Add "No LoRA" step', !!(noneW ? noneW.value : true), (val) => {
                                 if (noneW) {
-                                    noneW.value = e.target.checked;
-                                    if (noneW.callback) noneW.callback(noneW.value);
+                                    noneW.value = val;
+                                    if (noneW.callback) noneW.callback(val);
                                 }
                                 updateAll();
-                            };
-                            
-                            noneLabel.appendChild(noneCb);
-                            noneLabel.appendChild(document.createTextNode("🚫 No LoRA"));
-                            topRow.appendChild(noneLabel);
+                            }));
 
-                            container.appendChild(topRow);
+                            container.appendChild(topCont);
 
                             multiCombos.forEach(function(wName) {
                                 const internalW = self.widgets.find(function(x) { return x.name === wName; });
