@@ -113,11 +113,16 @@ function syncSelection(node) {
     const indexW = node.widgets.find(w => w.name === "index");
     const posW = node.widgets.find(w => w.name === "selected_positive");
     const negW = node.widgets.find(w => w.name === "selected_negative");
+    const countW = node.widgets.find(w => w.name === "total_count");
 
     if (!promptDataW || !indexW) return;
 
     let pairs = [];
     try { pairs = JSON.parse(promptDataW.value || "[]"); } catch (e) { pairs = []; }
+
+    if (countW) {
+        countW.value = pairs.length;
+    }
 
     if (pairs.length > 0) {
         const idx = parseInt(indexW.value) || 0;
@@ -181,8 +186,9 @@ app.registerExtension({
                 // Make selection outputs read-only
                 const posWidget = this.widgets.find(w => w.name === "selected_positive");
                 const negWidget = this.widgets.find(w => w.name === "selected_negative");
+                const countWidget = this.widgets.find(w => w.name === "total_count");
                 
-                [posWidget, negWidget].forEach(w => {
+                [posWidget, negWidget, countWidget].forEach(w => {
                     if (w) {
                         w.disabled = true;
                         if (w.inputEl) {
