@@ -1,5 +1,5 @@
 # comfyui-ckpt-utils
-Helpful nodes I've created to work with ComfyUI. Lora Manager is a prerequisite for the Cycler nodes.
+Utility nodes I've created to work with ComfyUI. Lora Manager is a prerequisite for the Cycler nodes.
 
 ## Nodes
 
@@ -8,3 +8,4 @@ Helpful nodes I've created to work with ComfyUI. Lora Manager is a prerequisite 
 *  **Tag Parser**: Parses a comma-separated list of tags to extract a typed value for a given label. This allows you to use Lora Manager to tag settings like steps, cfg, sampler, etc. and then use those tags to set optimal values for those settings in your workflow.
 *  **Prompt to Prefix**: Hashes a prompt to create unique prefixes based on each prompt to make it easier to identify and organize.
 *  **Prompt Selection**: Helpful UI component for creating and selecting from a list of prompts.
+*  **LoRA Stack Update**: Node which updates the strengths of a lora stack.
