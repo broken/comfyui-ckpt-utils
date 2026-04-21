@@ -685,6 +685,15 @@ app.registerExtension({
                         const ckptWidget = this.widgets.find(function(w) { return w.name === "last_selected_ckpt"; });
                         if (ckptWidget) ckptWidget.value = message.last_selected_ckpt[0];
                     }
+
+                    if (message.ckpt_name) {
+                        const ckptW = this.widgets.find(w => w.name === "ckpt_name");
+                        if (ckptW && ckptW.value !== message.ckpt_name[0]) {
+                            this._syncing = true;
+                            ckptW.value = message.ckpt_name[0];
+                            this._syncing = false;
+                        }
+                    }
                 };
         }
     },

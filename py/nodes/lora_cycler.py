@@ -237,25 +237,14 @@ class LoraCyclerCU:
             }
 
         # 1. Determine target lora
-        target_name = lora_name
-        target_tags = None
-        
-        # Fallback: If lora_name is missing or "None" when not in models (though it should be if include_no_lora is True)
-        if not target_name:
-            real_idx = max(0, current_index)
-            cycle_idx = (real_idx // max(1, repeats)) % len(models)
-            selected = models[cycle_idx]
-            target_name = selected["name"]
-            target_tags = selected["tags"]
+        # We always follow current_index as the source of truth.
+        real_idx = max(0, current_index)
+        cycle_idx = (real_idx // max(1, repeats)) % len(models)
+        selected = models[cycle_idx]
+        target_name = selected["name"]
+        target_tags = selected["tags"]
 
-        # 2. Resolve tags if not already known
-        if target_tags is None:
-            for m in models:
-                if m["name"] == target_name:
-                    target_tags = m["tags"]
-                    break
-        
-        # 3. Create lora_stack
+        # 2. Create lora_stack
         lora_stack = []
         if target_name and target_name != "None":
             lora_stack.append((target_name, strength_model, strength_clip))
@@ -263,6 +252,7 @@ class LoraCyclerCU:
         return {
             "result": (lora_stack, target_name, target_tags or "", len(models)),
             "ui": {
+                "lora_name": [target_name],
                 "last_selected_lora": [target_name],
                 "total_count": [len(models)]
             }

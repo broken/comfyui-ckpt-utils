@@ -230,28 +230,19 @@ class CheckpointCyclerCU:
             }
 
         # 1. Determine target checkpoint
-        # UI now synchronizes ckpt_name to current_index BEFORE queuing.
-        target_name = ckpt_name
-        target_tags = None
-        
-        # Fallback: If ckpt_name is missing or looks like an index-based request (unlikely with new UI)
-        if not target_name or target_name == "Auto (Cycle)":
-            real_idx = max(0, current_index)
-            cycle_idx = (real_idx // max(1, repeats)) % len(models)
-            selected = models[cycle_idx]
-            target_name = selected["name"]
-            target_tags = selected["tags"]
+        # We always follow current_index as the source of truth. 
+        # Manual selection in the UI updates current_index instantly, 
+        # and external links override it.
+        real_idx = max(0, current_index)
+        cycle_idx = (real_idx // max(1, repeats)) % len(models)
+        selected = models[cycle_idx]
+        target_name = selected["name"]
+        target_tags = selected["tags"]
 
-        # 2. Resolve tags if not already known
-        if target_tags is None:
-            for m in models:
-                if m["name"] == target_name:
-                    target_tags = m["tags"]
-                    break
-        
         return {
             "result": (target_name, target_tags or "", len(models)),
             "ui": {
+                "ckpt_name": [target_name],
                 "last_selected_ckpt": [target_name],
                 "total_count": [len(models)]
             }

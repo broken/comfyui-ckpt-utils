@@ -706,6 +706,15 @@ app.registerExtension({
                         const loraWidget = this.widgets.find(function(w) { return w.name === "last_selected_lora"; });
                         if (loraWidget) loraWidget.value = message.last_selected_lora[0];
                     }
+
+                    if (message.lora_name) {
+                        const loraW = this.widgets.find(w => w.name === "lora_name");
+                        if (loraW && loraW.value !== message.lora_name[0]) {
+                            this._syncing = true;
+                            loraW.value = message.lora_name[0];
+                            this._syncing = false;
+                        }
+                    }
                 };
         }
     },
