@@ -96,6 +96,11 @@ function syncFromIndex(node, internalOnly) {
         const ciw = node.widgets.find(w => w.name === "current_index");
         const repeatsW = node.widgets.find(w => w.name === "repeats");
         if (!loraW || !ciw) return;
+
+        // Check if index or repeats are driven by inputs
+        // If they are, we cannot reliably predict the lora on the client side
+        const isIndexLinked = node.inputs && node.inputs.some(i => i.name === "current_index" && i.link !== null);
+        const isRepeatsLinked = node.inputs && node.inputs.some(i => i.name === "repeats" && i.link !== null);
         
         const matches = getFilteredLoras(node);
         if (matches.length === 0) {
@@ -122,13 +127,21 @@ function syncFromIndex(node, internalOnly) {
         // Update Status Display
         const statusW = node.widgets.find(w => w.name === "cycler_status");
         if (statusW) {
-            statusW.value = `Lora ${idx + 1}/${matches.length} | Iter ${iteration}/${repeats}`;
+            if (isIndexLinked || isRepeatsLinked) {
+                statusW.value = `Driven by Input | Waiting for execution...`;
+            } else {
+                statusW.value = `Lora ${idx + 1}/${matches.length} | Iter ${iteration}/${repeats}`;
+            }
             if (statusW.inputEl) statusW.inputEl.value = statusW.value;
         }
         
-        if (targetModel && loraW.value !== targetModel.name) {
-            loraW.value = targetModel.name;
-            if (loraW.callback && !internalOnly) loraW.callback(loraW.value);
+        // Only update the dropdown value automatically if NOT driven by an external input
+        // If it IS driven by an input, we wait for the backend to tell us the truth via onExecuted
+        if (!isIndexLinked && !isRepeatsLinked) {
+            if (targetModel && loraW.value !== targetModel.name) {
+                loraW.value = targetModel.name;
+                if (loraW.callback && !internalOnly) loraW.callback(loraW.value);
+            }
         }
     } finally {
         node._syncing = false;
