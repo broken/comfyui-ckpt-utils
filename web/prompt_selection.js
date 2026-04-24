@@ -107,36 +107,6 @@ function injectStyles() {
     }
 }
 
-// Helper to sync selection widgets from the current index
-function syncSelection(node) {
-    const promptDataW = node.widgets.find(w => w.name === "prompt_data");
-    const indexW = node.widgets.find(w => w.name === "index");
-    const posW = node.widgets.find(w => w.name === "selected_positive");
-    const negW = node.widgets.find(w => w.name === "selected_negative");
-
-    if (!promptDataW || !indexW) return;
-
-    let pairs = [];
-    try { pairs = JSON.parse(promptDataW.value || "[]"); } catch (e) { pairs = []; }
-
-    if (pairs.length > 0) {
-        const idx = parseInt(indexW.value) || 0;
-        const actualIdx = Math.max(0, Math.min(idx, pairs.length - 1));
-        const pair = pairs[actualIdx];
-        
-        if (posW) {
-            posW.value = pair.pos || "";
-            if (posW.inputEl) posW.inputEl.value = posW.value;
-        }
-        if (negW) {
-            negW.value = pair.neg || "";
-            if (negW.inputEl) negW.inputEl.value = negW.value;
-        }
-    } else {
-        if (posW) posW.value = "";
-        if (negW) negW.value = "";
-    }
-}
 
 app.registerExtension({
     name: "comfyui-ckpt-utils.PromptSelection",
@@ -168,29 +138,6 @@ app.registerExtension({
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 const self = this;
 
-                // Index callback for syncing
-                const indexWidget = this.widgets.find(w => w.name === "index");
-                if (indexWidget) {
-                    const oldCb = indexWidget.callback;
-                    indexWidget.callback = function() {
-                        if (oldCb) oldCb.apply(this, arguments);
-                        syncSelection(self);
-                    };
-                }
-
-                // Make selection outputs read-only
-                const posWidget = this.widgets.find(w => w.name === "selected_positive");
-                const negWidget = this.widgets.find(w => w.name === "selected_negative");
-                
-                [posWidget, negWidget].forEach(w => {
-                    if (w) {
-                        w.disabled = true;
-                        if (w.inputEl) {
-                            w.inputEl.readOnly = true;
-                            w.inputEl.style.opacity = "0.7";
-                        }
-                    }
-                });
 
                 // UI Container
                 const container = document.createElement("div");
@@ -220,7 +167,6 @@ app.registerExtension({
                         pairs.push({ pos, neg });
                     });
                     promptDataWidget.value = JSON.stringify(pairs);
-                    syncSelection(self); 
                 };
 
                 const renderPairs = () => {
@@ -291,7 +237,6 @@ app.registerExtension({
                 });
 
                 renderPairs();
-                syncSelection(this);
 
                 return r;
             };
@@ -301,7 +246,6 @@ app.registerExtension({
                 if (onConfigure) onConfigure.apply(this, arguments);
                 const ui = this.widgets.find(w => w.name === "ps_ui");
                 if (ui && ui.options && ui.options.setValue) ui.options.setValue("");
-                syncSelection(this);
             };
         }
     },
@@ -320,8 +264,6 @@ app.registerExtension({
                     
                     let pairCount = 0;
                     try { pairCount = JSON.parse(promptDataW.value || "[]").length; } catch(e) {}
-
-                    syncSelection(node);
 
                     return {
                         node,

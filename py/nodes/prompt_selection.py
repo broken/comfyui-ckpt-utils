@@ -16,9 +16,6 @@ class PromptSelectionCU:
                 "index": ("INT", {"default": 0, "min": 0, "max": 999, "control_after_generate": True}),
                 # PS_DATA is a custom type handled in JS to create a hidden widget
                 "prompt_data": ("PS_DATA", {"default": "[]"}),
-                # These are updated on execution and displayed in the UI as read-only widgets
-                "selected_positive": ("STRING", {"default": "", "multiline": True}),
-                "selected_negative": ("STRING", {"default": "", "multiline": True}),
             }
         }
 
@@ -27,7 +24,7 @@ class PromptSelectionCU:
     FUNCTION = "select"
     OUTPUT_NODE = True 
 
-    def select(self, index, prompt_data, selected_positive="", selected_negative=""):
+    def select(self, index, prompt_data):
         try:
             # Handle potential escaping or empty strings
             if not prompt_data or prompt_data.strip() == "":
@@ -40,7 +37,6 @@ class PromptSelectionCU:
 
         pos_text = ""
         neg_text = ""
-        actual_index = 0
 
         if data and len(data) > 0:
             # Clamp index to available pairs
@@ -51,15 +47,4 @@ class PromptSelectionCU:
         else:
             logger.warning("[PromptSelection] No prompt pairs defined in prompt_data.")
 
-        # The 'ui' return sends these values back to the frontend widgets
-        return {
-            "result": (pos_text, neg_text, len(data)),
-            "ui": {
-                "selection_info": {
-                    "index": actual_index,
-                    "positive": pos_text,
-                    "negative": neg_text,
-                    "count": len(data)
-                }
-            }
-        }
+        return (pos_text, neg_text, len(data))
