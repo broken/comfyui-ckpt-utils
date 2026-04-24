@@ -7,6 +7,7 @@ import { app } from "../../scripts/app.js";
  */
 
 const styles = `
+    .ps-container {
         overflow-y: scroll;
         height: 100%;
         min-height: 150px;
@@ -70,7 +71,7 @@ const styles = `
     }
     .ps-remove-btn:hover { background: #bf616a; color: #fff; }
     .ps-textarea {
-        width: 100%;
+        width: calc(100% - 4px);
         min-height: 45px;
         background: rgba(0, 0, 0, 0.4);
         border: 1px solid rgba(255, 255, 255, 0.15);
@@ -78,10 +79,31 @@ const styles = `
         color: #eceff4;
         font-size: 12px;
         padding: 8px;
+        padding-bottom: 12px;
         margin-bottom: 8px;
+        margin-right: 4px;
         resize: vertical;
         outline: none;
         box-sizing: border-box;
+    }
+    .ps-textarea::-webkit-resizer {
+        background-color: #5e81ac;
+        background-image: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.3) 50%);
+        border-radius: 0 0 6px 0;
+    }
+    .ps-textarea::-webkit-scrollbar {
+        width: 10px;
+    }
+    .ps-textarea::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 10px;
+    }
+    .ps-textarea::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+    }
+    .ps-textarea::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.2);
     }
     .ps-textarea.ps-neg { border-left: 3px solid #bf616a; }
     .ps-textarea.ps-pos { border-left: 3px solid #a3be8c; }
