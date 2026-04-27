@@ -755,6 +755,9 @@ app.registerExtension({
                     const controlW = node.widgets.find(w => w.name === "current_index_control") || 
                                      node.widgets.find(w => w.name === "control_after_generate");
                     
+                    const isIndexLinked = node.inputs && node.inputs.some(i => i.name === "current_index" && i.link !== null);
+                    const isRepeatsLinked = !repeatsW || (node.inputs && node.inputs.some(i => i.name === "repeats" && i.link !== null));
+                    
                     let mode = "increment";
                     if (controlW && controlW.value) {
                         const v = String(controlW.value).toLowerCase();
@@ -782,7 +785,7 @@ app.registerExtension({
                     if (!ciw) continue;
 
                     const matches = getFilteredLoras(node);
-                    const totalSteps = matches.length * repeats;
+                    const totalSteps = (isIndexLinked || isRepeatsLinked) ? 0 : matches.length * repeats;
                     let newVal = startVal;
 
                     if (mode === "increment") {
