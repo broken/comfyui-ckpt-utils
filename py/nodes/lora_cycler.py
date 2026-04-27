@@ -176,7 +176,7 @@ class LoraCyclerCU:
                     continue
 
                 model_tags = [str(t).strip().lower() for t in item.get("tags", [])]
-                if inc_t and not all(t in model_tags for t in inc_t):
+                if inc_t and not any(t in model_tags for t in inc_t):
                     continue
                 if exc_t and any(t in model_tags for t in exc_t):
                     continue
