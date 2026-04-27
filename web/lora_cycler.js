@@ -59,7 +59,7 @@ function getFilteredLoras(node) {
         if (favOnly && !c.favorite) continue;
         if (b_models.length > 0 && b_models.indexOf(c.base_model) === -1) continue;
         
-        const hasIncT = inc_t.length === 0 || inc_t.every(function(t) { return c.tags && c.tags.indexOf(t) !== -1; });
+        const hasIncT = inc_t.length === 0 || inc_t.some(function(t) { return c.tags && c.tags.indexOf(t) !== -1; });
         if (!hasIncT) continue;
         
         const hasExcT = exc_t.length > 0 && exc_t.some(function(t) { return c.tags && c.tags.indexOf(t) !== -1; });
