@@ -755,7 +755,9 @@ app.registerExtension({
                         ciw,
                         startVal: ciw ? parseInt(ciw.value) || 0 : 0,
                         repeats: repeatsW ? parseInt(repeatsW.value) || 1 : 1,
-                        mode
+                        mode,
+                        isIndexLinked,
+                        isRepeatsLinked
                     };
                 });
 
@@ -764,7 +766,7 @@ app.registerExtension({
 
                 // 3. Increment for the NEXT execution
                 for (const snap of snapshots) {
-                    const { node, ciw, startVal, repeats, mode } = snap;
+                    const { node, ciw, startVal, repeats, mode, isIndexLinked, isRepeatsLinked } = snap;
                     if (!ciw) continue;
 
                     const matches = getFilteredCheckpoints(node);
