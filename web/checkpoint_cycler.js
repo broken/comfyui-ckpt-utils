@@ -7,8 +7,8 @@ console.log("[CheckpointCycler] Loading checkpoint_cycler.js extension...");
 let cyclerMetadata = null;
 let fetchOngoing = null;
 
-async function fetchMetadata() {
-    if (cyclerMetadata && cyclerMetadata.checkpoints && cyclerMetadata.checkpoints.length > 0) {
+async function fetchMetadata(force = false) {
+    if (!force && cyclerMetadata && cyclerMetadata.checkpoints && cyclerMetadata.checkpoints.length > 0) {
         return cyclerMetadata;
     }
     if (fetchOngoing) return await fetchOngoing;
@@ -82,27 +82,21 @@ function calculateMatches(node) {
     return getFilteredCheckpoints(node).length;
 }
 
-function syncFromIndex(node, internalOnly) {
-    if (node._syncing) return;
-    node._syncing = true;
-    try {
-        const ckptW = node.widgets.find(w => w.name === "ckpt_name");
-        const ciw = node.widgets.find(w => w.name === "current_index");
-        const repeatsW = node.widgets.find(w => w.name === "repeats");
-        if (!ckptW || !ciw) return;
+function updateStatusWidget(node) {
+    const statusW = node.widgets.find(w => w.name === "cycler_status");
+    if (!statusW) return;
 
-        // Check if index or repeats are driven by inputs
-        // If they are, we cannot reliably predict the model on the client side
-        const isIndexLinked = node.inputs && node.inputs.some(i => i.name === "current_index" && i.link !== null);
-        const isRepeatsLinked = node.inputs && node.inputs.some(i => i.name === "repeats" && i.link !== null);
-        
+    const ciw = node.widgets.find(w => w.name === "current_index");
+    const repeatsW = node.widgets.find(w => w.name === "repeats");
+    if (!ciw) return;
+
+    const isIndexLinked = node.inputs && node.inputs.some(i => i.name === "current_index" && i.link !== null);
+    const isRepeatsLinked = node.inputs && node.inputs.some(i => i.name === "repeats" && i.link !== null);
+
+    if (isIndexLinked || isRepeatsLinked) {
+        statusW.value = `Driven by Input | Waiting for execution...`;
+    } else {
         const matches = getFilteredCheckpoints(node);
-        if (matches.length === 0) {
-            ckptW.options.values = ["(No matches)"];
-            ckptW.value = "(No matches)";
-            return;
-        }
-        
         const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
         const currentVal = parseInt(ciw.value) || 0;
         const totalSteps = matches.length * repeats;
@@ -116,21 +110,47 @@ function syncFromIndex(node, internalOnly) {
             iteration = (wrappedVal % repeats) + 1;
         }
         
-        const targetModel = matches[idx];
+        statusW.value = `Model ${idx + 1}/${matches.length} | Iter ${iteration}/${repeats}`;
+    }
+    if (statusW.inputEl) statusW.inputEl.value = statusW.value;
+}
+
+function syncFromIndex(node, internalOnly) {
+    if (node._syncing) return;
+    node._syncing = true;
+    try {
+        const ckptW = node.widgets.find(w => w.name === "ckpt_name");
+        const ciw = node.widgets.find(w => w.name === "current_index");
+        const repeatsW = node.widgets.find(w => w.name === "repeats");
+        if (!ckptW || !ciw) return;
+
+        // Check if index or repeats are driven by inputs
+        const isIndexLinked = node.inputs && node.inputs.some(i => i.name === "current_index" && i.link !== null);
+        const isRepeatsLinked = node.inputs && node.inputs.some(i => i.name === "repeats" && i.link !== null);
         
-        // Update Status Display
-        const statusW = node.widgets.find(w => w.name === "cycler_status");
-        if (statusW) {
-            if (isIndexLinked || isRepeatsLinked) {
-                statusW.value = `Driven by Input | Waiting for execution...`;
-            } else {
-                statusW.value = `Model ${idx + 1}/${matches.length} | Iter ${iteration}/${repeats}`;
-            }
-            if (statusW.inputEl) statusW.inputEl.value = statusW.value;
+        const matches = getFilteredCheckpoints(node);
+        if (matches.length === 0) {
+            ckptW.options.values = ["(No matches)"];
+            ckptW.value = "(No matches)";
+            updateStatusWidget(node);
+            return;
         }
         
+        const repeats = repeatsW ? parseInt(repeatsW.value) || 1 : 1;
+        const currentVal = parseInt(ciw.value) || 0;
+        const totalSteps = matches.length * repeats;
+        
+        let idx = 0;
+        if (totalSteps > 0) {
+            const wrappedVal = currentVal % totalSteps;
+            idx = Math.floor(wrappedVal / repeats);
+        }
+        
+        const targetModel = matches[idx];
+        
+        updateStatusWidget(node);
+        
         // Only update the dropdown value automatically if NOT driven by an external input
-        // If it IS driven by an input, we wait for the backend to tell us the truth via onExecuted
         if (!isIndexLinked && !isRepeatsLinked) {
             if (targetModel && ckptW.value !== targetModel.name) {
                 ckptW.value = targetModel.name;
@@ -162,6 +182,7 @@ function syncFromCkpt(node, internalOnly) {
                 if (ciw.callback && !internalOnly) ciw.callback(newVal);
             }
         }
+        updateStatusWidget(node);
     } finally {
         node._syncing = false;
     }
@@ -681,7 +702,6 @@ app.registerExtension({
                 });
             };;
 
-                const onExecuted = nodeType.prototype.onExecuted;
                 nodeType.prototype.onExecuted = function (message) {
                     if (onExecuted) onExecuted.apply(this, arguments);
                     const self = this;
@@ -689,7 +709,28 @@ app.registerExtension({
                     if (message.total_count) {
                         const mWidget = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
                         if (mWidget) {
-                            mWidget.value = String(message.total_count[0]);
+                            const newCount = parseInt(message.total_count[0]);
+                            const currentLocalCount = calculateMatches(self);
+                            
+                            if (newCount !== currentLocalCount) {
+                                console.log(`[CheckpointCycler] Backend count (${newCount}) differs from frontend count (${currentLocalCount}). Refreshing metadata...`);
+                                fetchMetadata(true).then(() => {
+                                    // self refers to the node instance
+                                    const updateAll = function() {
+                                        const mw = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                                        if (mw && cyclerMetadata) {
+                                            mw.value = String(calculateMatches(self));
+                                            if (mw.inputEl) mw.inputEl.value = mw.value;
+                                        }
+                                        updateCkptList(self);
+                                        updateStatusWidget(self);
+                                        if (app.graph) app.graph.setDirtyCanvas(true, true);
+                                    };
+                                    updateAll();
+                                });
+                            }
+                            
+                            mWidget.value = String(newCount);
                             if (mWidget.inputEl) mWidget.inputEl.value = mWidget.value;
                         }
                     }
@@ -707,6 +748,8 @@ app.registerExtension({
                             this._syncing = false;
                         }
                     }
+                    
+                    updateStatusWidget(self);
                 };
         }
     },
