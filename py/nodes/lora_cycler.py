@@ -41,12 +41,12 @@ def _format_model_name_for_comfyui_local(file_path: str, model_roots: list) -> s
             continue
     return os.path.basename(file_path)
 
-async def get_lora_metadata():
+async def get_lora_metadata(force_refresh=False):
     """Fetches full cached loras database and compiles base models and tags for the JS UI."""
     try:
         ServiceRegistry = _get_service_registry()
         scanner = await ServiceRegistry.get_lora_scanner()
-        cache = await scanner.get_cached_data()
+        cache = await scanner.get_cached_data(force_refresh=force_refresh)
         model_roots = scanner.get_model_roots()
         
         base_models = set()

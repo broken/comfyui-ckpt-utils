@@ -18,7 +18,8 @@ async function fetchMetadata(force = false) {
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
             console.log("[CheckpointCycler] Fetching metadata from server...");
-            const response = await fetch("/comfyui-ckpt-utils/cycler-metadata", { signal: controller.signal });
+            const url = "/comfyui-ckpt-utils/cycler-metadata" + (force ? "?refresh=true" : "");
+            const response = await fetch(url, { signal: controller.signal });
             clearTimeout(timeoutId);
             if (!response.ok) {
                 console.warn("[CheckpointCycler] Metadata fetch failed with status:", response.status);
@@ -673,10 +674,39 @@ app.registerExtension({
 
                 this.widgets = this.widgets.filter(function(w) { return w.type !== "button" || (!w.name.startsWith("+ Edit") && w.name !== "reset_cycle"); });
                 this.addWidget("button", "reset_cycle", "Restart Cycle", function() {
-                    const ciw = self.widgets.find(function(w) { return w.name === "current_index"; });
+                    const ciw = self.widgets.find(w => w.name === "current_index");
                     if (ciw) {
                         ciw.value = 0;
                         if (ciw.callback) ciw.callback(0);
+                    }
+                });
+
+                this.addWidget("button", "refresh_db", "Refresh Database", async function() {
+                    const mw = self.widgets.find(w => w.name === "total_matching_models");
+                    const oldVal = mw ? mw.value : null;
+                    if (mw) {
+                        mw.value = "Refreshing...";
+                        if (mw.inputEl) mw.inputEl.value = mw.value;
+                    }
+                    try {
+                        await fetchMetadata(true);
+                        const updateAll = function() {
+                            const mw2 = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                            if (mw2 && cyclerMetadata) {
+                                mw2.value = String(calculateMatches(self));
+                                if (mw2.inputEl) mw2.inputEl.value = mw2.value;
+                            }
+                            updateCkptList(self);
+                            updateStatusWidget(self);
+                            if (app.graph) app.graph.setDirtyCanvas(true, true);
+                        };
+                        updateAll();
+                    } catch (e) {
+                        console.error(e);
+                        if (mw) {
+                            mw.value = oldVal;
+                            if (mw.inputEl) mw.inputEl.value = mw.value;
+                        }
                     }
                 });
 

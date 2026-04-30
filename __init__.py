@@ -21,7 +21,8 @@ from .py.nodes.lora_stack_update import LoraStackUpdate
 @PromptServer.instance.routes.get("/comfyui-ckpt-utils/cycler-metadata")
 async def fetch_cycler_metadata(request):
     try:
-        data = await get_metadata()
+        refresh = request.query.get("refresh") == "true"
+        data = await get_metadata(force_refresh=refresh)
         return web.json_response(data)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -29,7 +30,8 @@ async def fetch_cycler_metadata(request):
 @PromptServer.instance.routes.get("/comfyui-ckpt-utils/lora-cycler-metadata")
 async def fetch_lora_cycler_metadata(request):
     try:
-        data = await get_lora_metadata()
+        refresh = request.query.get("refresh") == "true"
+        data = await get_lora_metadata(force_refresh=refresh)
         return web.json_response(data)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
