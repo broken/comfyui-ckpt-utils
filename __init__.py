@@ -16,6 +16,7 @@ from .py.nodes.tag_parser import TagParserCU  # Brought over from the user's rec
 from .py.nodes.prompt_hasher import PromptHasherCU
 from .py.nodes.prompt_selection import PromptSelectionCU
 from .py.nodes.lora_stack_update import LoraStackUpdate
+from .py.nodes.static_random_int import StaticRandomIntCU
 
 
 @PromptServer.instance.routes.get("/comfyui-ckpt-utils/cycler-metadata")
@@ -42,7 +43,8 @@ NODE_CLASS_MAPPINGS = {
     TagParserCU.NAME: TagParserCU,
     PromptHasherCU.NAME: PromptHasherCU,
     PromptSelectionCU.NAME: PromptSelectionCU,
-    LoraStackUpdate.NAME: LoraStackUpdate
+    LoraStackUpdate.NAME: LoraStackUpdate,
+    StaticRandomIntCU.NAME: StaticRandomIntCU
 }
 
 WEB_DIRECTORY = "./web"
