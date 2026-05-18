@@ -17,6 +17,7 @@ from .py.nodes.prompt_hasher import PromptHasherCU
 from .py.nodes.prompt_selection import PromptSelectionCU
 from .py.nodes.lora_stack_update import LoraStackUpdate
 from .py.nodes.static_random_int import StaticRandomIntCU
+from .py.nodes.checkpoint_list import CheckpointListCU
 
 
 @PromptServer.instance.routes.get("/comfyui-ckpt-utils/cycler-metadata")
@@ -44,7 +45,8 @@ NODE_CLASS_MAPPINGS = {
     PromptHasherCU.NAME: PromptHasherCU,
     PromptSelectionCU.NAME: PromptSelectionCU,
     LoraStackUpdate.NAME: LoraStackUpdate,
-    StaticRandomIntCU.NAME: StaticRandomIntCU
+    StaticRandomIntCU.NAME: StaticRandomIntCU,
+    CheckpointListCU.NAME: CheckpointListCU
 }
 
 WEB_DIRECTORY = "./web"
