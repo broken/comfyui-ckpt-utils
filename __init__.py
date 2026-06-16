@@ -19,6 +19,7 @@ from .py.nodes.lora_stack_update import LoraStackUpdate
 from .py.nodes.static_random_int import StaticRandomIntCU
 from .py.nodes.checkpoint_list import CheckpointListCU
 from .py.nodes.string_fallback import StringFallbackCU
+from .py.nodes.csv_to_dict import CSVToDictCU
 
 
 
@@ -49,7 +50,8 @@ NODE_CLASS_MAPPINGS = {
     LoraStackUpdate.NAME: LoraStackUpdate,
     StaticRandomIntCU.NAME: StaticRandomIntCU,
     CheckpointListCU.NAME: CheckpointListCU,
-    StringFallbackCU.NAME: StringFallbackCU
+    StringFallbackCU.NAME: StringFallbackCU,
+    CSVToDictCU.NAME: CSVToDictCU
 
 }
 
