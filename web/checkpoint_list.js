@@ -321,7 +321,13 @@ app.registerExtension({
                             
                             let allCheckpoints = [];
                             if (cyclerMetadata && cyclerMetadata.checkpoints) {
-                                allCheckpoints = cyclerMetadata.checkpoints.map(c => c.name).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+                                allCheckpoints = cyclerMetadata.checkpoints.map(c => c.name).sort((a, b) => {
+                                    const nameA = a.toLowerCase();
+                                    const nameB = b.toLowerCase();
+                                    if (nameA < nameB) return -1;
+                                    if (nameA > nameB) return 1;
+                                    return 0;
+                                });
                             }
                             
                             const lowerFilter = filterText.toLowerCase();

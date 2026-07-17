@@ -76,7 +76,13 @@ function getFilteredLoras(node) {
     }
     
     // Match Python sorting logic
-    filtered.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    filtered.sort((a, b) => {
+        const nameA = a.name.toLowerCase();
+        const nameB = b.name.toLowerCase();
+        if (nameA < nameB) return -1;
+        if (nameA > nameB) return 1;
+        return 0;
+    });
 
     if (includeNoLora) {
         filtered.unshift({ name: "None", tags: [], base_model: "N/A", folder: "", favorite: false });
