@@ -45,7 +45,7 @@ class CheckpointListCU:
     """Selects a checkpoint from a dynamically managed list using an index."""
 
     NAME = "Checkpoint List"
-    CATEGORY = "Dogatech/utils"
+    CATEGORY = "Dogatech/Lora Manager"
 
     @classmethod
     def INPUT_TYPES(cls):

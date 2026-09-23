@@ -7,7 +7,7 @@ class PromptSelectionCU:
     """Selects a positive and negative prompt pair from a dynamically managed list."""
 
     NAME = "Prompt Selection"
-    CATEGORY = "Dogatech/utils"
+    CATEGORY = "Dogatech/deprecated"
 
     @classmethod
     def INPUT_TYPES(cls):
