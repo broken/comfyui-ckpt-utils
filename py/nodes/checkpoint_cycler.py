@@ -103,7 +103,7 @@ class CheckpointCyclerCU:
     """Unified Checkpoint Cycler node with builtin filters and state tracking."""
 
     NAME = "Checkpoint Cycler"
-    CATEGORY = "comfyui-ckpt-utils/randomizer"
+    CATEGORY = "Dogatech/randomizer"
 
     @classmethod
     def INPUT_TYPES(cls):

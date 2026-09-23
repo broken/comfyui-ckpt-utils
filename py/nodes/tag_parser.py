@@ -2,7 +2,7 @@ class TagParserCU:
     """Parses a comma-separated list of tags to extract a typed value for a given label."""
 
     NAME = "Tag Parser"
-    CATEGORY = "comfyui-ckpt-utils/utils"
+    CATEGORY = "Dogatech/utils"
 
     @classmethod
     def INPUT_TYPES(cls):

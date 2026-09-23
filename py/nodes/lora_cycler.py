@@ -104,7 +104,7 @@ class LoraCyclerCU:
     """Unified Lora Cycler node with builtin filters and state tracking."""
 
     NAME = "Lora Cycler"
-    CATEGORY = "comfyui-ckpt-utils/randomizer"
+    CATEGORY = "Dogatech/randomizer"
 
     @classmethod
     def INPUT_TYPES(cls):

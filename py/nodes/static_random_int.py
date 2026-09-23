@@ -7,7 +7,7 @@ class StaticRandomIntCU:
     """Generates a random integer (0 to MAX) only when a button is pressed in the UI."""
 
     NAME = "Static Random Int"
-    CATEGORY = "comfyui-ckpt-utils/utils"
+    CATEGORY = "Dogatech/utils"
 
     @classmethod
     def INPUT_TYPES(cls):

@@ -6,7 +6,7 @@ class CSVToDictCU:
     """Converts a comma-separated string of key:value pairs into a Python dictionary."""
 
     NAME = "CSV to Dict"
-    CATEGORY = "comfyui-ckpt-utils/utils"
+    CATEGORY = "Dogatech/utils"
 
     @classmethod
     def INPUT_TYPES(cls):

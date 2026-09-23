@@ -6,7 +6,7 @@ class StringFallbackCU:
     """Takes two strings. If the first string is empty or None, the second string is outputted, otherwise, the first string is outputted."""
 
     NAME = "String Fallback"
-    CATEGORY = "comfyui-ckpt-utils/utils"
+    CATEGORY = "Dogatech/utils"
 
     @classmethod
     def INPUT_TYPES(cls):
