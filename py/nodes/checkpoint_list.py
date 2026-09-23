@@ -45,7 +45,7 @@ class CheckpointListCU:
     """Selects a checkpoint from a dynamically managed list using an index."""
 
     NAME = "Checkpoint List"
-    CATEGORY = "Lora Manager/utils"
+    CATEGORY = "comfyui-ckpt-utils/utils"
 
     @classmethod
     def INPUT_TYPES(cls):

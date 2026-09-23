@@ -2,7 +2,7 @@ class TagParserCU:
     """Parses a comma-separated list of tags to extract a typed value for a given label."""
 
     NAME = "Tag Parser"
-    CATEGORY = "Lora Manager/utils"
+    CATEGORY = "comfyui-ckpt-utils/utils"
 
     @classmethod
     def INPUT_TYPES(cls):

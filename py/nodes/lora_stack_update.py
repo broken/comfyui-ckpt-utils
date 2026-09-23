@@ -16,7 +16,7 @@ class LoraStackUpdate:
     RETURN_TYPES = ("LORA_STACK",)
     RETURN_NAMES = ("LORA_STACK",)
     FUNCTION = "update_strengths"
-    CATEGORY = "Lora Manager/utils"
+    CATEGORY = "comfyui-ckpt-utils/utils"
     NAME = "Lora Stack Update"
 
     def update_strengths(self, lora_stack, index, model_strength, clip_strength, use_model_strength):

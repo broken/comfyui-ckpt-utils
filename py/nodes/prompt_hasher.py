@@ -4,7 +4,7 @@ class PromptHasherCU:
     """Generates a deterministic 7-character alphanumeric hash from a prompt string."""
 
     NAME = "Prompt to Prefix"
-    CATEGORY = "Lora Manager/utils"
+    CATEGORY = "comfyui-ckpt-utils/utils"
 
     @classmethod
     def INPUT_TYPES(cls):

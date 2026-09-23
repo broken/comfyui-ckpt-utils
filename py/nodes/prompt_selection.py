@@ -7,7 +7,7 @@ class PromptSelectionCU:
     """Selects a positive and negative prompt pair from a dynamically managed list."""
 
     NAME = "Prompt Selection"
-    CATEGORY = "Lora Manager/utils"
+    CATEGORY = "comfyui-ckpt-utils/utils"
 
     @classmethod
     def INPUT_TYPES(cls):
