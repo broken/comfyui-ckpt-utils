@@ -104,7 +104,7 @@ class LoraCyclerCU:
     """Unified Lora Cycler node with builtin filters and state tracking."""
 
     NAME = "Lora Cycler"
-    CATEGORY = "Dogatech/Lora Manager"
+    CATEGORY = "Dogatech/deprecated"
 
     @classmethod
     def INPUT_TYPES(cls):
