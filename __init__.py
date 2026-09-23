@@ -16,6 +16,7 @@ from .py.nodes.tag_parser import TagParserCU  # Brought over from the user's rec
 from .py.nodes.prompt_hasher import PromptHasherCU
 from .py.nodes.prompt_selection import PromptSelectionCU
 from .py.nodes.lora_stack_update import LoraStackUpdate
+from .py.nodes.lora_stack_update_from_tags import LoraStackUpdateFromTagsCU
 from .py.nodes.static_random_int import StaticRandomIntCU
 from .py.nodes.checkpoint_list import CheckpointListCU
 from .py.nodes.string_fallback import StringFallbackCU
@@ -48,11 +49,11 @@ NODE_CLASS_MAPPINGS = {
     PromptHasherCU.NAME: PromptHasherCU,
     PromptSelectionCU.NAME: PromptSelectionCU,
     LoraStackUpdate.NAME: LoraStackUpdate,
+    LoraStackUpdateFromTagsCU.NAME: LoraStackUpdateFromTagsCU,
     StaticRandomIntCU.NAME: StaticRandomIntCU,
     CheckpointListCU.NAME: CheckpointListCU,
     StringFallbackCU.NAME: StringFallbackCU,
     CSVToDictCU.NAME: CSVToDictCU
-
 }
 
 WEB_DIRECTORY = "./web"

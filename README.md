@@ -6,6 +6,11 @@ Utility nodes I've created to work with ComfyUI. Lora Manager is a prerequisite 
 ### Lora Manager extension nodes
 
 *  **Checkpoint Cycler**: Cycles through a list of checkpoints based on a set of filters. Requires Lora Manager.
+*  **Lora Stack Update from Tags**: Parses strength values from tags and updates the values in the lora stack. Valid tag formats:
+    * `str:<val>` (e.g. str:0.9, str: 0.85): Sets both model and CLIP strength.
+    * `str:<model_val>,<clip_val>` (e.g. str:0.9,0.7): Sets model and CLIP strength individually.
+    * `str_model:<val>` / `model_str:<val>`: Sets model strength explicitly.
+    * `str_clip:<val>` / `clip_str:<val>`: Sets CLIP strength explicitly.
 
 ### utils
 
