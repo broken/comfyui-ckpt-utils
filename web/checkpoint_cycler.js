@@ -387,6 +387,305 @@ function syncNodeLayout(node) {
 
 injectStyles();
 
+function setupCheckpointCyclerNode(node) {
+    if (!node) return;
+    if (node._cc_setup_done) {
+        syncNodeLayout(node);
+        const uiw = node.widgets && node.widgets.find(function(w) { return w.name === "cc_ui"; });
+        if (uiw && uiw.options && uiw.options.setValue) uiw.options.setValue("");
+        return;
+    }
+    node._cc_setup_done = true;
+
+    var sync = function() { syncNodeLayout(node); };
+    sync();
+    setTimeout(sync, 10);
+    setTimeout(sync, 100);
+
+    // Implement standard computeSize override
+    node.onComputeSize = function() {
+        var h = 34; // Header
+        var currentY = 30;
+        var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only"];
+        if (this.widgets) {
+            this.widgets.forEach(function(w) {
+                const isHidden = w.type === "hidden" || w.hidden || custom.indexOf(w.name) !== -1;
+                if (!isHidden) {
+                    var wh = 24;
+                    if (w.computeSize) wh = w.computeSize()[1];
+                    w.y = currentY;
+                    currentY += wh + 4;
+                    h = currentY;
+                } else {
+                    // Put hidden widgets way off screen so they don't capture clicks
+                    w.y = -100;
+                    w.hidden = true;
+                }
+            });
+        }
+        return [this.size[0], h + 6];
+    };
+
+    const updateAll = function() {
+        updateCountDisplay();
+        updateCkptList(node);
+        if (app.graph) app.graph.setDirtyCanvas(true, true);
+    };
+
+    const updateCountDisplay = function() {
+        const mWidget = node.widgets && node.widgets.find(function(w) { return w.name === "total_matching_models"; });
+        if (mWidget && cyclerMetadata) {
+            const count = calculateMatches(node);
+            mWidget.value = String(count);
+            if (mWidget.inputEl) {
+                mWidget.inputEl.value = mWidget.value;
+            }
+        } 
+    };
+
+    const initialPoll = async function() {
+        const data = await fetchMetadata();
+        const mWidget = node.widgets && node.widgets.find(function(w) { return w.name === "total_matching_models"; });
+        if (mWidget && data && data.checkpoints && data.checkpoints.length > 0) {
+            updateAll();
+        } else if (mWidget) {
+            mWidget.value = (data && data.checkpoints) ? "Scanning checkpoints..." : "Database connection failed";
+            setTimeout(initialPoll, 2000);
+        }
+    };
+
+    initialPoll();
+
+    // Setup Two-Way Sync Callbacks
+    const ckptW = node.widgets && node.widgets.find(w => w.name === "ckpt_name");
+    const ciW = node.widgets && node.widgets.find(w => w.name === "current_index");
+    const repeatsW = node.widgets && node.widgets.find(w => w.name === "repeats");
+
+    if (ckptW && !ckptW._cc_hooked) {
+        ckptW._cc_hooked = true;
+        const oldCb = ckptW.callback;
+        ckptW.callback = function() {
+            if (oldCb) oldCb.apply(this, arguments);
+            syncFromCkpt(node);
+        };
+    }
+    if (ciW && !ciW._cc_hooked) {
+        ciW._cc_hooked = true;
+        const oldCb = ciW.callback;
+        ciW.callback = function() {
+            if (oldCb) oldCb.apply(this, arguments);
+            syncFromIndex(node);
+        };
+    }
+    if (repeatsW && !repeatsW._cc_hooked) {
+        repeatsW._cc_hooked = true;
+        const oldCb = repeatsW.callback;
+        repeatsW.callback = function() {
+            if (oldCb) oldCb.apply(this, arguments);
+            syncFromIndex(node);
+        };
+    }
+
+    if (!node.widgets) node.widgets = [];
+
+    if (!node.widgets.find(function(w) { return w.name === "total_matching_models"; })) {
+        node.addWidget("text", "total_matching_models", "Connecting to database...", function() {});
+        const mw = node.widgets.find(function(w) { return w.name === "total_matching_models"; });
+        if (mw && mw.inputEl) {
+            mw.inputEl.readOnly = true;
+            mw.inputEl.style.color = "#4a9eff";
+        }
+    }
+
+    if (!node.widgets.find(function(w) { return w.name === "cycler_status"; })) {
+        node.addWidget("text", "cycler_status", "Initializing...", function() {});
+        const sw = node.widgets.find(function(w) { return w.name === "cycler_status"; });
+        if (sw && sw.inputEl) {
+            sw.inputEl.readOnly = true;
+            sw.inputEl.style.color = "#10b981"; // Greenish for active status
+        }
+    }
+    
+    const setupDOMWidget = function() {
+        if (node.widgets.find(function(w) { return w.name === "cc_ui"; })) return;
+        try {
+            const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
+            const container = document.createElement("div");
+            container.className = "cc-dom-container";
+            container.addEventListener("wheel", function(e) { e.stopPropagation(); });
+            container.addEventListener("pointerdown", function(e) { if (e.pointerType !== "mouse" || e.button !== 1) e.stopPropagation(); });
+
+            const renderSections = function() {
+                container.innerHTML = "";
+
+                const createSwitchRow = (labelHtml, initialValue, onToggle) => {
+                    const row = document.createElement("div");
+                    row.className = "cc-toggle-row";
+                    
+                    const label = document.createElement("label");
+                    label.className = "cc-toggle-label";
+                    label.innerHTML = labelHtml;
+                    
+                    const sw = document.createElement("label");
+                    sw.className = "cc-switch";
+                    const cb = document.createElement("input");
+                    cb.type = "checkbox";
+                    cb.checked = initialValue;
+                    cb.onchange = (e) => onToggle(e.target.checked);
+                    
+                    const slider = document.createElement("span");
+                    slider.className = "cc-slider";
+                    
+                    sw.appendChild(cb);
+                    sw.appendChild(slider);
+                    row.appendChild(label);
+                    row.appendChild(sw);
+                    
+                    label.onclick = (e) => {
+                        if (e.target !== cb) {
+                            cb.checked = !cb.checked;
+                            onToggle(cb.checked);
+                        }
+                    };
+                    return row;
+                };
+                
+                // Top Row: Favorites Toggle
+                const topCont = document.createElement("div");
+                topCont.style = "display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;";
+                
+                const favW = node.widgets.find(w => w.name === "favorites_only");
+                topCont.appendChild(createSwitchRow("Favorites Only", !!(favW ? favW.value : false), (val) => {
+                    if (favW) {
+                        favW.value = val;
+                        if (favW.callback) favW.callback(val);
+                    }
+                    updateAll();
+                }));
+
+                container.appendChild(topCont);
+
+                multiCombos.forEach(function(wName) {
+                    const internalW = node.widgets.find(function(x) { return x.name === wName; });
+                    if (!internalW) return;
+                    
+                    internalW.type = "hidden";
+                    if (internalW.inputEl) {
+                        internalW.inputEl.style.display = "none";
+                        internalW.inputEl.remove();
+                        internalW.inputEl = null;
+                    }
+                    
+                    const section = document.createElement("div");
+                    section.className = "cc-section";
+                    const header = document.createElement("div");
+                    header.className = "cc-section-header";
+                    const title = document.createElement("span");
+                    title.className = "cc-section-title";
+                    title.textContent = wName.replace(/_/g, " ");
+                    
+                    const editBtn = document.createElement("button");
+                    editBtn.className = "cc-edit-btn";
+                    editBtn.innerHTML = "Edit";
+                    editBtn.onclick = function() {
+                        const counts = getAvailableCounts(node, wName);
+                        const allNames = Object.keys(counts).sort(function(a,b) { return counts[b] - counts[a]; });
+                        const items = allNames.map(function(n) { return {name: n, count: counts[n]}; });
+                        const selected = String(internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+                        
+                        openModal("Select " + wName.toUpperCase(), items, selected, function(newSelection) {
+                            internalW.value = newSelection.join(", ");
+                            updateAll();
+                            renderSections();
+                        });
+                    };
+                    
+                    header.appendChild(title);
+                    header.appendChild(editBtn);
+                    section.appendChild(header);
+                    
+                    const chipsCont = document.createElement("div");
+                    chipsCont.className = "cc-chips-container";
+                    const selected = String(internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+                    if (selected.length === 0) {
+                        const empty = document.createElement("div");
+                        empty.className = "cc-empty";
+                        empty.textContent = "No filters";
+                        chipsCont.appendChild(empty);
+                    } else {
+                        const isExclude = wName.indexOf("exclude") !== -1;
+                        const chipCls = wName === "base_models" ? "cc-chip-base" : (isExclude ? "cc-chip-exclude" : "cc-chip-include");
+                        const counts = getAvailableCounts(node, wName);
+                        selected.forEach(function(sel) {
+                            const chip = document.createElement("div");
+                            chip.className = "cc-chip " + chipCls;
+                            chip.textContent = sel + (counts[sel] ? " (" + counts[sel] + ")" : "");
+                            chipsCont.appendChild(chip);
+                        });
+                    }
+                    section.appendChild(chipsCont);
+                    container.appendChild(section);
+                });
+                
+                // Dynamically update the widget height to match the content
+                requestAnimationFrame(function() {
+                    var contentH = Math.min(400, Math.max(60, container.scrollHeight + 10));
+                    domW.computeSize = function() { return [node.size[0], contentH]; };
+                    syncNodeLayout(node);
+                });
+            };
+
+            renderSections();
+            const domW = node.addDOMWidget("cc_ui", "CC_UI", container, {
+                serialize: false,
+                getValue: function() { return ""; },
+                setValue: function(v) { renderSections(); }
+            });
+            domW.computeSize = function() { return [node.size[0], 220]; };
+
+            // Recalculate size NOW that we've added the DOM widget
+            syncNodeLayout(node);
+        } catch (err) {
+            console.error("[CheckpointCycler] setupDOMWidget error:", err);
+        }
+    };
+
+    if (!node.widgets.find(function(w) { return w.name === "reset_cycle"; })) {
+        node.addWidget("button", "reset_cycle", "Restart Cycle", function() {
+            const ciw = node.widgets.find(w => w.name === "current_index");
+            if (ciw) {
+                ciw.value = 0;
+                if (ciw.callback) ciw.callback(0);
+            }
+        });
+    }
+
+    if (!node.widgets.find(function(w) { return w.name === "refresh_db"; })) {
+        node.addWidget("button", "refresh_db", "Refresh Database", async function() {
+            const mw = node.widgets.find(w => w.name === "total_matching_models");
+            const oldVal = mw ? mw.value : null;
+            if (mw) {
+                mw.value = "Refreshing...";
+                if (mw.inputEl) mw.inputEl.value = mw.value;
+            }
+            try {
+                await fetchMetadata(true);
+                updateAll();
+                updateStatusWidget(node);
+            } catch (e) {
+                console.error(e);
+                if (mw) {
+                    mw.value = oldVal;
+                    if (mw.inputEl) mw.inputEl.value = mw.value;
+                }
+            }
+        });
+    }
+
+    setupDOMWidget();
+    syncNodeLayout(node);
+}
+
 app.registerExtension({
     name: "comfyui-ckpt-utils.CheckpointCycler",
 
@@ -402,11 +701,8 @@ app.registerExtension({
                 draw: function() { return; },
                 computeSize: function() { return [0, 0]; }
             };
-            if (!node.widgets) node.widgets = [];
-            node.widgets.push(w);
             return { widget: w };
         };
-
 
         return {
             CC_BASE_MODELS: createHiddenDataWidget,
@@ -417,376 +713,81 @@ app.registerExtension({
         };
     },
 
+    nodeCreated(node) {
+        if (node && (node.type === "Checkpoint Cycler" || node.comfyClass === "Checkpoint Cycler")) {
+            setupCheckpointCyclerNode(node);
+        }
+    },
+
+    loadedGraphNode(node) {
+        if (node && (node.type === "Checkpoint Cycler" || node.comfyClass === "Checkpoint Cycler")) {
+            setupCheckpointCyclerNode(node);
+        }
+    },
+
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "Checkpoint Cycler") {
             console.log("[CheckpointCycler] beforeRegisterNodeDef matching Checkpoint Cycler");
 
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
-                console.log("[CheckpointCycler] onNodeCreated running...");
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
-                
-                var self = this;
-                var sync = function() { syncNodeLayout(self); };
-                sync();
-                setTimeout(sync, 10);
-                setTimeout(sync, 100);
-
-                // Implement standard computeSize override
-                this.onComputeSize = function() {
-                    var h = 34; // Header
-                    var currentY = 30;
-                    var custom = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude", "favorites_only"];
-                    if (this.widgets) {
-                        this.widgets.forEach(function(w) {
-                            const isHidden = w.type === "hidden" || w.hidden || custom.indexOf(w.name) !== -1;
-                            if (!isHidden) {
-                                var wh = 24;
-                                if (w.computeSize) wh = w.computeSize()[1];
-                                w.y = currentY;
-                                currentY += wh + 4;
-                                h = currentY;
-                            } else {
-                                // Put hidden widgets way off screen so they don't capture clicks
-                                w.y = -100;
-                                w.hidden = true;
-                            }
-                        });
-                    }
-                    return [this.size[0], h + 6];
-                };
-
-
-
-                const updateAll = function() {
-                    updateCountDisplay();
-                    updateCkptList(self);
-                    if (app.graph) app.graph.setDirtyCanvas(true, true);
-                };
-
-                const updateCountDisplay = function() {
-                    const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                    if (mWidget && cyclerMetadata) {
-                        const count = calculateMatches(self);
-                        mWidget.value = String(count);
-                        if (mWidget.inputEl) {
-                            mWidget.inputEl.value = mWidget.value;
-                        }
-                    } 
-                };
-
-                const initialPoll = async function() {
-                    console.log("[CheckpointCycler] polling initial metadata...");
-                    const data = await fetchMetadata();
-                    const mWidget = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                    if (mWidget && data && data.checkpoints && data.checkpoints.length > 0) {
-                        console.log("[CheckpointCycler] database ready, updating display");
-                        updateAll();
-                    } else if (mWidget) {
-                        mWidget.value = (data && data.checkpoints) ? "Scanning checkpoints..." : "Database connection failed";
-                        console.log("[CheckpointCycler] Database not ready yet: ", mWidget.value);
-                        setTimeout(initialPoll, 2000);
-                    }
-                };
-
-                initialPoll();
-
-                // Setup Two-Way Sync Callbacks
-                const ckptW = this.widgets.find(w => w.name === "ckpt_name");
-                const ciW = this.widgets.find(w => w.name === "current_index");
-                const repeatsW = this.widgets.find(w => w.name === "repeats");
-
-                if (ckptW) {
-                    const oldCb = ckptW.callback;
-                    ckptW.callback = function() {
-                        if (oldCb) oldCb.apply(this, arguments);
-                        syncFromCkpt(self);
-                    };
-                }
-                if (ciW) {
-                    const oldCb = ciW.callback;
-                    ciW.callback = function() {
-                        if (oldCb) oldCb.apply(this, arguments);
-                        syncFromIndex(self);
-                    };
-                }
-                if (repeatsW) {
-                    const oldCb = repeatsW.callback;
-                    repeatsW.callback = function() {
-                        if (oldCb) oldCb.apply(this, arguments);
-                        syncFromIndex(self);
-                    };
-                }
-
-                this.addWidget("text", "total_matching_models", "Connecting to database...", function() {});
-                const mw = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                if (mw && mw.inputEl) {
-                    mw.inputEl.readOnly = true;
-                    mw.inputEl.style.color = "#4a9eff";
-                }
-
-                // Added iteration display widget
-                this.addWidget("text", "cycler_status", "Initializing...", function() {});
-                const sw = this.widgets.find(function(w) { return w.name === "cycler_status"; });
-                if (sw && sw.inputEl) {
-                    sw.inputEl.readOnly = true;
-                    sw.inputEl.style.color = "#10b981"; // Greenish for active status
-                }
-                
-                const setupDOMWidget = function() {
-                    console.log("[CheckpointCycler] setupDOMWidget...");
-                    try {
-                        const multiCombos = ["base_models", "tags_include", "tags_exclude", "folders_include", "folders_exclude"];
-                        const container = document.createElement("div");
-                        container.className = "cc-dom-container";
-                        container.addEventListener("wheel", function(e) { e.stopPropagation(); });
-                        container.addEventListener("pointerdown", function(e) { if (e.pointerType !== "mouse" || e.button !== 1) e.stopPropagation(); });
-
-                        const renderSections = function() {
-                            container.innerHTML = "";
-
-                            const createSwitchRow = (labelHtml, initialValue, onToggle) => {
-                                const row = document.createElement("div");
-                                row.className = "cc-toggle-row";
-                                
-                                const label = document.createElement("label");
-                                label.className = "cc-toggle-label";
-                                label.innerHTML = labelHtml;
-                                
-                                const sw = document.createElement("label");
-                                sw.className = "cc-switch";
-                                const cb = document.createElement("input");
-                                cb.type = "checkbox";
-                                cb.checked = initialValue;
-                                cb.onchange = (e) => onToggle(e.target.checked);
-                                
-                                const slider = document.createElement("span");
-                                slider.className = "cc-slider";
-                                
-                                sw.appendChild(cb);
-                                sw.appendChild(slider);
-                                row.appendChild(label);
-                                row.appendChild(sw);
-                                
-                                label.onclick = (e) => {
-                                    if (e.target !== cb) {
-                                        cb.checked = !cb.checked;
-                                        onToggle(cb.checked);
-                                    }
-                                };
-                                return row;
-                            };
-                            
-                            // Top Row: Favorites Toggle
-                            const topCont = document.createElement("div");
-                            topCont.style = "display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;";
-                            
-                            const favW = self.widgets.find(w => w.name === "favorites_only");
-                            topCont.appendChild(createSwitchRow("Favorites Only", !!(favW ? favW.value : false), (val) => {
-                                if (favW) {
-                                    favW.value = val;
-                                    if (favW.callback) favW.callback(val);
-                                }
-                                updateAll();
-                            }));
-
-                            container.appendChild(topCont);
-
-                            multiCombos.forEach(function(wName) {
-                                const internalW = self.widgets.find(function(x) { return x.name === wName; });
-                                if (!internalW) return;
-                                
-                                internalW.type = "hidden";
-                                if (internalW.inputEl) {
-                                    internalW.inputEl.style.display = "none";
-                                    internalW.inputEl.remove();
-                                    internalW.inputEl = null;
-                                }
-                                
-                                const section = document.createElement("div");
-                                section.className = "cc-section";
-                                const header = document.createElement("div");
-                                header.className = "cc-section-header";
-                                const title = document.createElement("span");
-                                title.className = "cc-section-title";
-                                title.textContent = wName.replace(/_/g, " ");
-                                
-                                const editBtn = document.createElement("button");
-                                editBtn.className = "cc-edit-btn";
-                                editBtn.innerHTML = "Edit";
-                                editBtn.onclick = function() {
-                                    const counts = getAvailableCounts(self, wName);
-                                    const allNames = Object.keys(counts).sort(function(a,b) { return counts[b] - counts[a]; });
-                                    const items = allNames.map(function(n) { return {name: n, count: counts[n]}; });
-                                    const selected = String(internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
-                                    
-                                    openModal("Select " + wName.toUpperCase(), items, selected, function(newSelection) {
-                                        internalW.value = newSelection.join(", ");
-                                        updateAll();
-                                        renderSections();
-                                    });
-                                };
-                                
-                                header.appendChild(title);
-                                header.appendChild(editBtn);
-                                section.appendChild(header);
-                                
-                                const chipsCont = document.createElement("div");
-                                chipsCont.className = "cc-chips-container";
-                                const selected = String(internalW.value || "").split(",").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
-                                if (selected.length === 0) {
-                                    const empty = document.createElement("div");
-                                    empty.className = "cc-empty";
-                                    empty.textContent = "No filters";
-                                    chipsCont.appendChild(empty);
-                                } else {
-                                    const isExclude = wName.indexOf("exclude") !== -1;
-                                    const chipCls = wName === "base_models" ? "cc-chip-base" : (isExclude ? "cc-chip-exclude" : "cc-chip-include");
-                                    const counts = getAvailableCounts(self, wName);
-                                    selected.forEach(function(sel) {
-                                        const chip = document.createElement("div");
-                                        chip.className = "cc-chip " + chipCls;
-                                        chip.textContent = sel + (counts[sel] ? " (" + counts[sel] + ")" : "");
-                                        chipsCont.appendChild(chip);
-                                    });
-                                }
-                                section.appendChild(chipsCont);
-                                container.appendChild(section);
-                            });
-                            
-                            // Dynamically update the widget height to match the content
-                            requestAnimationFrame(function() {
-                                var contentH = Math.min(400, Math.max(60, container.scrollHeight + 10));
-                                domW.computeSize = function() { return [self.size[0], contentH]; };
-                                syncNodeLayout(self);
-                            });
-                        };
-
-
-                        renderSections();
-                        const domW = self.addDOMWidget("cc_ui", "CC_UI", container, {
-                            serialize: false,
-                            getValue: function() { return ""; },
-                            setValue: function(v) { renderSections(); }
-                        });
-                        domW.computeSize = function() { return [self.size[0], 220]; };
-
-                        // Recalculate size NOW that we've added the DOM widget
-                        syncNodeLayout(self);
-                    } catch (err) {
-                        console.error("[CheckpointCycler] setupDOMWidget error:", err);
-                    }
-                };
-
-                this.widgets = this.widgets.filter(function(w) { return w.type !== "button" || (!w.name.startsWith("+ Edit") && w.name !== "reset_cycle"); });
-                this.addWidget("button", "reset_cycle", "Restart Cycle", function() {
-                    const ciw = self.widgets.find(w => w.name === "current_index");
-                    if (ciw) {
-                        ciw.value = 0;
-                        if (ciw.callback) ciw.callback(0);
-                    }
-                });
-
-                this.addWidget("button", "refresh_db", "Refresh Database", async function() {
-                    const mw = self.widgets.find(w => w.name === "total_matching_models");
-                    const oldVal = mw ? mw.value : null;
-                    if (mw) {
-                        mw.value = "Refreshing...";
-                        if (mw.inputEl) mw.inputEl.value = mw.value;
-                    }
-                    try {
-                        await fetchMetadata(true);
-                        const updateAll = function() {
-                            const mw2 = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                            if (mw2 && cyclerMetadata) {
-                                mw2.value = String(calculateMatches(self));
-                                if (mw2.inputEl) mw2.inputEl.value = mw2.value;
-                            }
-                            updateCkptList(self);
-                            updateStatusWidget(self);
-                            if (app.graph) app.graph.setDirtyCanvas(true, true);
-                        };
-                        updateAll();
-                    } catch (e) {
-                        console.error(e);
-                        if (mw) {
-                            mw.value = oldVal;
-                            if (mw.inputEl) mw.inputEl.value = mw.value;
-                        }
-                    }
-                });
-
-                requestAnimationFrame(function() {
-                    if (!self.widgets.find(function(w) { return w.name === "cc_ui"; })) {
-                        setupDOMWidget();
-                        app.graph.setDirtyCanvas(true, true);
-                    }
-                });
+                setupCheckpointCyclerNode(this);
                 return r;
             };
+
             const onConfigure = nodeType.prototype.onConfigure;
             nodeType.prototype.onConfigure = function() {
                 if (onConfigure) onConfigure.apply(this, arguments);
-                var self = this;
-                var sync = function() { syncNodeLayout(self); };
-                sync();
-                setTimeout(sync, 100);
+                setupCheckpointCyclerNode(this);
+            };
+
+            const onExecuted = nodeType.prototype.onExecuted;
+            nodeType.prototype.onExecuted = function (message) {
+                if (onExecuted) onExecuted.apply(this, arguments);
+                const self = this;
                 
-                requestAnimationFrame(function() {
-                    const uiw = self.widgets.find(function(w) { return w.name === "cc_ui"; });
-                    if (uiw && uiw.options && uiw.options.setValue) uiw.options.setValue("");
-                });
-            };;
-
-                nodeType.prototype.onExecuted = function (message) {
-                    if (onExecuted) onExecuted.apply(this, arguments);
-                    const self = this;
-                    
-                    if (message.total_count) {
-                        const mWidget = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                        if (mWidget) {
-                            const newCount = parseInt(message.total_count[0]);
-                            const currentLocalCount = calculateMatches(self);
-                            
-                            if (newCount !== currentLocalCount) {
-                                console.log(`[CheckpointCycler] Backend count (${newCount}) differs from frontend count (${currentLocalCount}). Refreshing metadata...`);
-                                fetchMetadata(true).then(() => {
-                                    // self refers to the node instance
-                                    const updateAll = function() {
-                                        const mw = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
-                                        if (mw && cyclerMetadata) {
-                                            mw.value = String(calculateMatches(self));
-                                            if (mw.inputEl) mw.inputEl.value = mw.value;
-                                        }
-                                        updateCkptList(self);
-                                        updateStatusWidget(self);
-                                        if (app.graph) app.graph.setDirtyCanvas(true, true);
-                                    };
-                                    updateAll();
-                                });
-                            }
-                            
-                            mWidget.value = String(newCount);
-                            if (mWidget.inputEl) mWidget.inputEl.value = mWidget.value;
+                if (message.total_count) {
+                    const mWidget = this.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                    if (mWidget) {
+                        const newCount = parseInt(message.total_count[0]);
+                        const currentLocalCount = calculateMatches(self);
+                        
+                        if (newCount !== currentLocalCount) {
+                            console.log(`[CheckpointCycler] Backend count (${newCount}) differs from frontend count (${currentLocalCount}). Refreshing metadata...`);
+                            fetchMetadata(true).then(() => {
+                                const mw = self.widgets.find(function(w) { return w.name === "total_matching_models"; });
+                                if (mw && cyclerMetadata) {
+                                    mw.value = String(calculateMatches(self));
+                                    if (mw.inputEl) mw.inputEl.value = mw.value;
+                                }
+                                updateCkptList(self);
+                                updateStatusWidget(self);
+                                if (app.graph) app.graph.setDirtyCanvas(true, true);
+                            });
                         }
+                        
+                        mWidget.value = String(newCount);
+                        if (mWidget.inputEl) mWidget.inputEl.value = mWidget.value;
                     }
+                }
 
-                    if (message.last_selected_ckpt) {
-                        const ckptWidget = this.widgets.find(function(w) { return w.name === "last_selected_ckpt"; });
-                        if (ckptWidget) ckptWidget.value = message.last_selected_ckpt[0];
-                    }
+                if (message.last_selected_ckpt) {
+                    const ckptWidget = this.widgets.find(function(w) { return w.name === "last_selected_ckpt"; });
+                    if (ckptWidget) ckptWidget.value = message.last_selected_ckpt[0];
+                }
 
-                    if (message.ckpt_name) {
-                        const ckptW = this.widgets.find(w => w.name === "ckpt_name");
-                        if (ckptW && ckptW.value !== message.ckpt_name[0]) {
-                            this._syncing = true;
-                            ckptW.value = message.ckpt_name[0];
-                            this._syncing = false;
-                        }
+                if (message.ckpt_name) {
+                    const ckptW = this.widgets.find(w => w.name === "ckpt_name");
+                    if (ckptW && ckptW.value !== message.ckpt_name[0]) {
+                        this._syncing = true;
+                        ckptW.value = message.ckpt_name[0];
+                        this._syncing = false;
                     }
-                    
-                    updateStatusWidget(self);
-                };
+                }
+                
+                updateStatusWidget(self);
+            };
         }
     },
 
